@@ -29,6 +29,12 @@ struct LogoSettingsView: View {
             }
             .padding(.top, 10)
             
+            // AÑADIDO: Indicamos el tamaño recomendado
+            Text("Tamaño recomendado: 1600 × 562 px")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+                .padding(.bottom, 8)
+            
             // Botón para limpiar y volver a la imagen por defecto
             Button("Restaurar Logo por defecto") {
                 dbManager.setSettingValue("", forKey: "custom_logo_path")
@@ -43,7 +49,7 @@ struct LogoSettingsView: View {
             }
         }
         .padding()
-        .frame(width: 400, height: 300)
+        .frame(width: 600, height: 400)
         .onAppear {
             loadCurrentLogo()
         }
@@ -76,10 +82,7 @@ struct LogoSettingsView: View {
         panel.title = "Seleccionar imagen para el logo"
         
         if panel.runModal() == .OK, let url = panel.url {
-            // Guardamos la ruta en DB (ORIGINAL)
-            // dbManager.setSettingValue(url.path, forKey: "custom_logo_path") // COMENTADO para no borrarlo
-
-            // NUEVO: copiamos la imagen a ApplicationSupport para que el path no se pierda
+            // Copiamos la imagen a ApplicationSupport para conservarla
             do {
                 let fm = FileManager.default
                 let appSupport = try fm.url(

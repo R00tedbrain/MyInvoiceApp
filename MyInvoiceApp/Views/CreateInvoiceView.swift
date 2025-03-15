@@ -350,6 +350,7 @@ struct CreateInvoiceView: View {
     // Cargar la factura si es edición
     private func setupView() {
         if let existing = invoiceToEdit {
+            // Si estamos editando, rellenamos con lo que ya tenía
             invoiceNumber   = existing.invoiceNumber
             invoiceDate     = existing.invoiceDate
             issuerName      = existing.issuerName
@@ -367,17 +368,20 @@ struct CreateInvoiceView: View {
             totalIRPF       = existing.totalIRPF
             totalFactura    = existing.totalFactura
             
-            // issuerId
             selectedIssuerId = existing.issuerId
         } else {
+            // Si es una factura nueva:
             invoiceNumber = dbManager.getNextInvoiceNumber()
             let df = DateFormatter()
             df.dateFormat = "dd/MM/yyyy"
             invoiceDate = df.string(from: Date())
             
-            issuerName    = "ETM INSTANT WORK S.L"
-            issuerAddress = "Calle Lluís Duran 40, 08100 Mollet del Valles (Barcelona)"
+            // CAMBIADO: Quitamos los valores por defecto para Emisor
+            issuerName    = ""  // ← Dejamos vacío en vez de "ETM INSTANT WORK S.L"
+            issuerAddress = ""  // ← Dejamos vacío en vez de la dirección
             issuerNIF     = ""
+            
+            // Mantenemos IVA e IRPF al 21% y 0% (si lo deseas):
             ivaPercentage = 21.0
             irpfPercentage = 0.0
         }
@@ -420,7 +424,7 @@ struct CreateInvoiceView: View {
         recalcTotals()
         let invoice = Invoice(
             id: invoiceToEdit?.id,
-            issuerId: selectedIssuerId, // ← nuevo
+            issuerId: selectedIssuerId,
             invoiceNumber: invoiceNumber,
             invoiceDate: invoiceDate,
             issuerName: issuerName,
