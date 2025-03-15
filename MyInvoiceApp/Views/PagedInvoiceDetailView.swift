@@ -8,13 +8,20 @@ struct PagedInvoiceDetailView: View {
     
     // Ajusta cuántas filas por página quieras
     let maxRowsPerPage = 25
-
+    
     // Para ejemplo, cada fila la dibujaremos con un alto fijo ~ 24-30
     let rowHeight: CGFloat = 30
 
-    // NUEVO: para acceder a la ruta del logo
+    // Para acceder a la ruta del logo y leer las etiquetas personalizadas
     @EnvironmentObject var dbManager: DatabaseManager
-
+    
+    // Labels personalizados de columnas (por defecto "Concepto", "Modelo", etc.)
+    @State private var labelConcept  = "Concepto"
+    @State private var labelModel    = "Modelo"
+    @State private var labelBastidor = "Bastidor"
+    @State private var labelDate     = "Fecha"
+    @State private var labelAmount   = "Importe"
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // CABECERA (emisor / cliente)
@@ -30,7 +37,7 @@ struct PagedInvoiceDetailView: View {
             // Dibujamos cada "página" (bloque)
             ForEach(pages.indices, id: \.self) { pageIndex in
                 VStack(alignment: .leading, spacing: 0) {
-                    // Cabecera de tabla
+                    // Cabecera de tabla (usa las etiquetas personalizadas)
                     tableHeader()
 
                     // Filas de esta "página"
@@ -54,7 +61,7 @@ struct PagedInvoiceDetailView: View {
 
             Divider()
 
-            // AQUÍ cambiamos para cargar logo personalizado o etm.png
+            // Logo (custom o etm.png por defecto)
             let customLogoPath = dbManager.getSettingValue(forKey: "custom_logo_path")
             if !customLogoPath.isEmpty {
                 let fileURL = URL(fileURLWithPath: customLogoPath)
@@ -85,6 +92,10 @@ struct PagedInvoiceDetailView: View {
         .padding()
         .background(Color.white)
         .environment(\.colorScheme, .light)
+        // Cargamos los labels al mostrarse la vista
+        .onAppear {
+            loadColumnLabels()
+        }
     }
 
     // -------------- Vistas Auxiliares --------------
@@ -108,11 +119,11 @@ struct PagedInvoiceDetailView: View {
 
     private func tableHeader() -> some View {
         HStack {
-            Text("Concepto").bold().frame(width: 100, alignment: .leading)
-            Text("Modelo").bold().frame(width: 100, alignment: .leading)
-            Text("Bastidor").bold().frame(width: 100, alignment: .leading)
-            Text("Fecha").bold().frame(width: 80, alignment: .leading)
-            Text("Importe").bold().frame(width: 80, alignment: .trailing)
+            Text(labelConcept) .bold().frame(width: 100, alignment: .leading)
+            Text(labelModel)   .bold().frame(width: 100, alignment: .leading)
+            Text(labelBastidor).bold().frame(width: 100, alignment: .leading)
+            Text(labelDate)    .bold().frame(width: 80,  alignment: .leading)
+            Text(labelAmount)  .bold().frame(width: 80,  alignment: .trailing)
         }
         .padding(.bottom, 4)
     }
@@ -157,6 +168,24 @@ struct PagedInvoiceDetailView: View {
             }
         }
         .padding(.top, 6)
+    }
+
+    // -------------- Carga de etiquetas personalizadas --------------
+    private func loadColumnLabels() {
+        let c1 = dbManager.getSettingValue(forKey: "column_concept_label")
+        labelConcept  = c1.isEmpty ? "Concepto" : c1
+
+        let c2 = dbManager.getSettingValue(forKey: "column_model_label")
+        labelModel    = c2.isEmpty ? "Modelo" : c2
+
+        let c3 = dbManager.getSettingValue(forKey: "column_bastidor_label")
+        labelBastidor = c3.isEmpty ? "Bastidor" : c3
+
+        let c4 = dbManager.getSettingValue(forKey: "column_date_label")
+        labelDate     = c4.isEmpty ? "Fecha" : c4
+
+        let c5 = dbManager.getSettingValue(forKey: "column_amount_label")
+        labelAmount   = c5.isEmpty ? "Importe" : c5
     }
 
     // -------------- Partir items en bloques --------------

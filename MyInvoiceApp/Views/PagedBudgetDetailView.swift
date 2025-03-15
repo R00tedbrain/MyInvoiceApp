@@ -8,6 +8,13 @@ struct PagedBudgetDetailView: View {
     // MAX filas
     let maxRowsPerPage = 25
     
+    // Column labels (por defecto)
+    @State private var labelConcept  = "Concepto"
+    @State private var labelModel    = "Modelo"
+    @State private var labelBastidor = "Bastidor"
+    @State private var labelDate     = "Fecha"
+    @State private var labelAmount   = "Importe"
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             headerView
@@ -21,7 +28,7 @@ struct PagedBudgetDetailView: View {
             
             ForEach(pages.indices, id: \.self) { pageIndex in
                 VStack(alignment: .leading, spacing: 0) {
-                    tableHeader()
+                    tableHeader()  // ← Usa labels personalizados
                     ForEach(pages[pageIndex], id: \.id) { item in
                         rowView(item)
                             .frame(height: 24)
@@ -70,9 +77,29 @@ struct PagedBudgetDetailView: View {
         .padding()
         .background(Color.white)
         .environment(\.colorScheme, .light)
+        .onAppear {
+            loadColumnLabels()
+        }
     }
     
-    // ARREGLADO: un solo contenedor (VStack) que engloba todo
+    // Cargar labels de DB
+    private func loadColumnLabels() {
+        let c1 = dbManager.getSettingValue(forKey: "column_concept_label")
+        labelConcept  = c1.isEmpty ? "Concepto" : c1
+        
+        let c2 = dbManager.getSettingValue(forKey: "column_model_label")
+        labelModel    = c2.isEmpty ? "Modelo" : c2
+        
+        let c3 = dbManager.getSettingValue(forKey: "column_bastidor_label")
+        labelBastidor = c3.isEmpty ? "Bastidor" : c3
+        
+        let c4 = dbManager.getSettingValue(forKey: "column_date_label")
+        labelDate     = c4.isEmpty ? "Fecha" : c4
+        
+        let c5 = dbManager.getSettingValue(forKey: "column_amount_label")
+        labelAmount   = c5.isEmpty ? "Importe" : c5
+    }
+    
     private var headerView: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Bloque 1: Emisor y Cliente
@@ -121,11 +148,11 @@ struct PagedBudgetDetailView: View {
     
     private func tableHeader() -> some View {
         HStack {
-            Text("Concepto").bold().frame(width: 100, alignment: .leading)
-            Text("Modelo").bold().frame(width: 80, alignment: .leading)
-            Text("Bastidor").bold().frame(width: 80, alignment: .leading)
-            Text("Fecha").bold().frame(width: 80, alignment: .leading)
-            Text("Importe").bold().frame(width: 80, alignment: .trailing)
+            Text(labelConcept).bold().frame(width: 100, alignment: .leading)
+            Text(labelModel).bold().frame(width: 80, alignment: .leading)
+            Text(labelBastidor).bold().frame(width: 80, alignment: .leading)
+            Text(labelDate).bold().frame(width: 80, alignment: .leading)
+            Text(labelAmount).bold().frame(width: 80, alignment: .trailing)
         }
         .padding(.bottom, 2)
     }

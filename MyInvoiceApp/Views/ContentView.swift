@@ -18,7 +18,7 @@ struct ContentView: View {
     @State private var showServicesView = false
     @State private var showIssuersView  = false
     
-    // NUEVO: Para mostrar la ventana de configuración de logo
+    // Botón para configurar logo
     @State private var showLogoSettings = false
 
     // Factor de escalado al imprimir
@@ -38,25 +38,38 @@ struct ContentView: View {
                     }
                     .contextMenu {
                         Button("Editar") {
-                            selectedInvoice = inv
+                            // Aseguramos tomar la versión más reciente del invoice (por si se acaba de guardar)
+                            if let updated = dbManager.invoices.first(where: { $0.id == inv.id }) {
+                                selectedInvoice = updated
+                            } else {
+                                selectedInvoice = inv
+                            }
                             showEditInvoice = true
                         }
                         Button("Eliminar", role: .destructive) {
                             dbManager.deleteInvoice(inv)
                         }
                         Button("Ver / Imprimir (preview)") {
-                            selectedInvoice = inv
+                            // Tomamos la versión actualizada
+                            if let updated = dbManager.invoices.first(where: { $0.id == inv.id }) {
+                                selectedInvoice = updated
+                            } else {
+                                selectedInvoice = inv
+                            }
                             showPrintPreview = true
                         }
                         Button("Imprimir directo") {
-                            printDirectly(invoice: inv)
+                            // Tomamos la versión actualizada
+                            let invoiceToPrint = dbManager.invoices.first(where: { $0.id == inv.id }) ?? inv
+                            printDirectly(invoice: invoiceToPrint)
                         }
                         Button("Exportar PDF directo") {
-                            exportPDFDirectly(invoice: inv)
+                            let invoiceToExport = dbManager.invoices.first(where: { $0.id == inv.id }) ?? inv
+                            exportPDFDirectly(invoice: invoiceToExport)
                         }
-                        // NUEVA OPCIÓN: Exportar PDF sin panel
                         Button("Exportar PDF sin panel") {
-                            exportPDFDirectlyNoPanel(invoice: inv)
+                            let invoiceToExport = dbManager.invoices.first(where: { $0.id == inv.id }) ?? inv
+                            exportPDFDirectlyNoPanel(invoice: invoiceToExport)
                         }
                     }
                 }
@@ -70,25 +83,25 @@ struct ContentView: View {
                     } label: {
                         Label("Nueva factura", systemImage: "plus")
                     }
-                    // Botón Clientes (ahora con icono)
+                    // Botón Clientes
                     Button {
                         showClientsView = true
                     } label: {
                         Label("Clientes", systemImage: "person.2.fill")
                     }
-                    // Botón Emisores (ahora con icono)
+                    // Botón Emisores
                     Button {
                         showIssuersView = true
                     } label: {
                         Label("Emisores", systemImage: "building.2.fill")
                     }
-                    // Backup
+                    // Backup DB
                     Button {
                         backupDatabaseAction()
                     } label: {
                         Label("Backup DB", systemImage: "externaldrive.badge.plus")
                     }
-                    // Restaurar / Cargar
+                    // Restaurar DB
                     Button {
                         loadDatabaseAction()
                     } label: {
@@ -101,9 +114,7 @@ struct ContentView: View {
                         Label("Informes", systemImage: "doc.text.magnifyingglass")
                     }
                     
-                    // ─────────────────────────────────────
-                    // NUEVOS BOTONES
-                    // ─────────────────────────────────────
+                    // NUEVOS BOTONES: Presupuestos, Gastos, Servicios
                     Button {
                         showBudgetsView = true
                     } label: {
@@ -120,7 +131,7 @@ struct ContentView: View {
                         Label("Servicios", systemImage: "wrench.and.screwdriver")
                     }
                     
-                    // NUEVO: Botón para configurar logo
+                    // Configurar Logo
                     Button {
                         showLogoSettings = true
                     } label: {
@@ -148,11 +159,10 @@ struct ContentView: View {
                 CreateInvoiceView(invoiceToEdit: invoice)
             }
         }
-        // AÑADIDO .environmentObject(dbManager) para que PrintPreviewView reciba el DatabaseManager
         .sheet(isPresented: $showPrintPreview) {
             if let invoice = selectedInvoice {
                 PrintPreviewView(invoice: invoice)
-                    .environmentObject(dbManager) // AÑADIDO
+                    .environmentObject(dbManager) // Inyectamos DB
             }
         }
         .sheet(isPresented: $showClientsView) {
@@ -170,11 +180,9 @@ struct ContentView: View {
         .sheet(isPresented: $showServicesView) {
             ServicesView()
         }
-        // Hoja: Emisores
         .sheet(isPresented: $showIssuersView) {
             IssuersView()
         }
-        // NUEVO: Hoja para cambiar logo
         .sheet(isPresented: $showLogoSettings) {
             LogoSettingsView()
                 .environmentObject(dbManager)
@@ -207,7 +215,7 @@ struct ContentView: View {
     private func printDirectly(invoice: Invoice) {
         let scaled = ScaledView(scale: forcedScale) {
             PagedInvoiceDetailView(invoice: invoice)
-                .environmentObject(dbManager) // AÑADIDO para que no falle
+                .environmentObject(dbManager)
         }
         let multiPageView = MultiPageNSView(rootView: scaled)
 
@@ -234,7 +242,7 @@ struct ContentView: View {
     private func exportPDFDirectly(invoice: Invoice) {
         let scaled = ScaledView(scale: forcedScale) {
             PagedInvoiceDetailView(invoice: invoice)
-                .environmentObject(dbManager) // AÑADIDO
+                .environmentObject(dbManager)
         }
         let multiPageView = MultiPageNSView(rootView: scaled)
 
@@ -277,7 +285,7 @@ struct ContentView: View {
     private func exportPDFDirectlyNoPanel(invoice: Invoice) {
         let scaled = ScaledView(scale: forcedScale) {
             PagedInvoiceDetailView(invoice: invoice)
-                .environmentObject(dbManager) // AÑADIDO
+                .environmentObject(dbManager)
         }
         let multiPageView = MultiPageNSView(rootView: scaled)
 

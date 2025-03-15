@@ -1,0 +1,4746 @@
+----- Árbol del directorio -----
+.
+(0tqq (BMyInvoiceApp
+(0x   tqq (BApp
+(0x   x   mqq (BMyInvoiceAppApp.swift
+(0x   tqq (BAssets.xcassets
+(0x   x   tqq (BAccentColor.colorset
+(0x   x   x   mqq (BContents.json
+(0x   x   tqq (BAppIcon.appiconset
+(0x   x   x   tqq (BContents.json
+(0x   x   x   tqq (BDiseño sin título (90) 1.png
+(0x   x   x   tqq (BDiseño sin título (90) 2.png
+(0x   x   x   tqq (BDiseño sin título (90).png
+(0x   x   x   tqq (BDiseño sin título (91) 1.png
+(0x   x   x   tqq (BDiseño sin título (91).png
+(0x   x   x   tqq (BDiseño sin título (92).png
+(0x   x   x   tqq (Blogo111 1.png
+(0x   x   x   tqq (Blogo111 2.png
+(0x   x   x   tqq (Blogo111.png
+(0x   x   x   tqq (Blogo123 1.png
+(0x   x   x   tqq (Blogo123.png
+(0x   x   x   mqq (Blogo1233.png
+(0x   x   tqq (BContents.json
+(0x   x   mqq (Betm.imageset
+(0x   x       tqq (BContents.json
+(0x   x       tqq (BETM 1.png
+(0x   x       tqq (BETM 2.png
+(0x   x       mqq (BETM.png
+(0x   tqq (BDatabase
+(0x   x   mqq (BDatabaseManager.swift
+(0x   tqq (BModel
+(0x   x   tqq (BBudget.swift
+(0x   x   tqq (BBudgetItem.swift
+(0x   x   tqq (BClient.swift
+(0x   x   tqq (BExpense.swift
+(0x   x   tqq (BInvoice.swift
+(0x   x   tqq (BInvoiceItem.swift
+(0x   x   tqq (BIssuer.swift
+(0x   x   mqq (BService.swift
+(0x   tqq (BMyInvoiceApp.entitlements
+(0x   tqq (BMyInvoiceAppRelease.entitlements
+(0x   tqq (BPreview Content
+(0x   x   mqq (BPreview Assets.xcassets
+(0x   x       mqq (BContents.json
+(0x   tqq (BResources
+(0x   x   mqq (Betm.png
+(0x   tqq (BViews
+(0x   x   tqq (BBudgetsView.swift
+(0x   x   tqq (BClientsView.swift
+(0x   x   tqq (BContentView.swift
+(0x   x   tqq (BCreateBudgetView.swift
+(0x   x   tqq (BCreateInvoiceView.swift
+(0x   x   tqq (BExpensesReportView.swift
+(0x   x   tqq (BExpensesView.swift
+(0x   x   tqq (BInformesView.swift
+(0x   x   tqq (BInvoiceDetailView.swift
+(0x   x   tqq (BIssuersView.swift
+(0x   x   tqq (BItemColumnsSettingsView.swift
+(0x   x   tqq (BLogoSettingsView.swift
+(0x   x   tqq (BPagedBudgetDetailView.swift
+(0x   x   tqq (BPagedInvoiceDetailView.swift
+(0x   x   tqq (BPrintPreviewView.swift
+(0x   x   mqq (BServicesView.swift
+(0x   mqq (Bscrit.sh
+(0tqq (BMyInvoiceApp.xcodeproj
+(0x   tqq (Bproject.pbxproj
+(0x   tqq (Bproject.xcworkspace
+(0x   x   tqq (Bcontents.xcworkspacedata
+(0x   x   tqq (Bxcshareddata
+(0x   x   x   mqq (Bswiftpm
+(0x   x   x       mqq (Bconfiguration
+(0x   x   mqq (Bxcuserdata
+(0x   x       mqq (Bsirh0f.xcuserdatad
+(0x   x           tqq (BIDEFindNavigatorScopes.plist
+(0x   x           mqq (BUserInterfaceState.xcuserstate
+(0x   mqq (Bxcuserdata
+(0x       mqq (Bsirh0f.xcuserdatad
+(0x           tqq (Bxcdebugger
+(0x           x   mqq (BBreakpoints_v2.xcbkptlist
+(0x           mqq (Bxcschemes
+(0x               mqq (Bxcschememanagement.plist
+(0tqq (Bbuscarbinding.sh
+(0tqq (Bextract.sh
+(0mqq (Boutput.txt
+
+24 directories, 59 files
+
+----- Contenido de los archivos .swift -----
+
+codigo 1: (./MyInvoiceApp/Database/DatabaseManager.swift)
+//
+//  DatabaseManager.swift
+//  MyInvoiceApp
+//
+//  Versión con migraciones + tablas extra
+//
+
+import Foundation
+import SQLite3
+import SwiftUI
+
+class DatabaseManager: ObservableObject {
+    
+    private var db: OpaquePointer?
+    
+    // Publicados (lo de siempre)
+    @Published var invoices: [Invoice] = []
+    @Published var clients:  [Client]  = []
+    
+    // MARK: - Init
+    init() {
+        print("DEBUG DatabaseManager: init()")
+        openDatabase()
+        checkAndPerformMigrations()  // Migraciones en vez de createTablesIfNeeded()
+        
+        // Cargar datos principales
+        fetchAllInvoices()
+        fetchAllClients()
+    }
+    
+    deinit {
+        print("DEBUG DatabaseManager: deinit() - cerrando DB")
+        sqlite3_close(db)
+    }
+    
+    // MARK: - Abrir DB
+    private func openDatabase() {
+        print("DEBUG DatabaseManager: openDatabase() - intentando abrir BD")
+        do {
+            let fileUrl = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            ).appendingPathComponent("MyInvoicesDB.sqlite")
+            
+            print("DEBUG DatabaseManager: Ruta BD = \(fileUrl.path)")
+            
+            if sqlite3_open(fileUrl.path, &db) != SQLITE_OK {
+                print("ERROR DatabaseManager: No se pudo abrir la BD")
+            } else {
+                print("DEBUG DatabaseManager: BD abierta en: \(fileUrl.path)")
+            }
+        } catch {
+            print("ERROR DatabaseManager: No se pudo crear ruta BD: \(error)")
+        }
+    }
+    
+    // MARK: - Migraciones
+    private func checkAndPerformMigrations() {
+        let currentVersion = getDBVersion()
+        print("DEBUG DatabaseManager: Versión actual del esquema = \(currentVersion)")
+        
+        // ============= Versión 1 =============
+        // Tablas básicas (invoices, invoice_items, clients) + col "nick" en clients
+        if currentVersion < 1 {
+            print("DEBUG DatabaseManager: Migrando a versión 1...")
+            
+            let createInvoiceTable = """
+            CREATE TABLE IF NOT EXISTS invoices(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                invoiceNumber INTEGER,
+                invoiceDate TEXT,
+                issuerName TEXT,
+                issuerAddress TEXT,
+                issuerNIF TEXT,
+                clientName TEXT,
+                clientAddress TEXT,
+                clientNIF TEXT,
+                observaciones TEXT,
+                ivaPercentage REAL,
+                irpfPercentage REAL,
+                baseImponible REAL,
+                totalIVA REAL,
+                totalIRPF REAL,
+                totalFactura REAL
+            );
+            """
+            let createItemsTable = """
+            CREATE TABLE IF NOT EXISTS invoice_items(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                invoiceId INTEGER,
+                concept TEXT,
+                model TEXT,
+                bastidor TEXT,
+                itemDate TEXT,
+                amount REAL
+            );
+            """
+            let createClientsTable = """
+            CREATE TABLE IF NOT EXISTS clients(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                address TEXT,
+                nif TEXT
+            );
+            """
+            
+            sqlite3_exec(db, createInvoiceTable, nil, nil, nil)
+            sqlite3_exec(db, createItemsTable,   nil, nil, nil)
+            sqlite3_exec(db, createClientsTable, nil, nil, nil)
+            
+            // Añadir columna "nick" a clients
+            let addNickColumn = "ALTER TABLE clients ADD COLUMN nick TEXT;"
+            sqlite3_exec(db, addNickColumn, nil, nil, nil)
+            
+            setDBVersion(1)
+        }
+        
+        // ============= Versión 2 =============
+        // Nuevas tablas: issuers, services, expenses, budgets, budget_items
+        if currentVersion < 2 {
+            print("DEBUG DatabaseManager: Migrando a versión 2...")
+            
+            let createIssuersTable = """
+            CREATE TABLE IF NOT EXISTS issuers(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                address TEXT,
+                nif TEXT,
+                phone TEXT
+            );
+            """
+            let createServicesTable = """
+            CREATE TABLE IF NOT EXISTS services(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                serviceName TEXT,
+                serviceDescription TEXT,
+                servicePrice REAL
+            );
+            """
+            let createExpensesTable = """
+            CREATE TABLE IF NOT EXISTS expenses(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                concept TEXT,
+                expenseDate TEXT,
+                amount REAL
+            );
+            """
+            let createBudgetsTable = """
+            CREATE TABLE IF NOT EXISTS budgets(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                budgetNumber INTEGER,
+                budgetDate TEXT,
+                issuerId INTEGER,
+                clientId INTEGER,
+                observaciones TEXT,
+                ivaPercentage REAL,
+                irpfPercentage REAL,
+                baseImponible REAL,
+                totalIVA REAL,
+                totalIRPF REAL,
+                totalBudget REAL
+            );
+            """
+            let createBudgetItemsTable = """
+            CREATE TABLE IF NOT EXISTS budget_items(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                budgetId INTEGER,
+                concept TEXT,
+                model TEXT,
+                bastidor TEXT,
+                itemDate TEXT,
+                amount REAL
+            );
+            """
+            
+            sqlite3_exec(db, createIssuersTable,     nil, nil, nil)
+            sqlite3_exec(db, createServicesTable,    nil, nil, nil)
+            sqlite3_exec(db, createExpensesTable,    nil, nil, nil)
+            sqlite3_exec(db, createBudgetsTable,     nil, nil, nil)
+            sqlite3_exec(db, createBudgetItemsTable, nil, nil, nil)
+            
+            setDBVersion(2)
+        }
+        
+        // ============= Versión 3 =============
+        // Tabla app_settings (para personalizar etiquetas, etc.)
+        if currentVersion < 3 {
+            print("DEBUG DatabaseManager: Migrando a versión 3...")
+            
+            let createSettingsTable = """
+            CREATE TABLE IF NOT EXISTS app_settings(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                settingKey TEXT NOT NULL UNIQUE,
+                settingValue TEXT
+            );
+            """
+            sqlite3_exec(db, createSettingsTable, nil, nil, nil)
+            
+            // Insertar valores por defecto (etiquetas)
+            let defaultLabels = [
+                ("column_concept_label",   "Concepto"),
+                ("column_model_label",     "Modelo"),
+                ("column_bastidor_label",  "Bastidor"),
+                ("column_date_label",      "Fecha"),
+                ("column_amount_label",    "Importe")
+            ]
+            for (key, val) in defaultLabels {
+                let insert = """
+                INSERT OR IGNORE INTO app_settings (settingKey, settingValue)
+                VALUES ('\(key)', '\(val)');
+                """
+                sqlite3_exec(db, insert, nil, nil, nil)
+            }
+            
+            setDBVersion(3)
+        }
+        
+        // ============= Versión 4 =============
+        // Añadir issuerId a invoices
+        if currentVersion < 4 {
+            print("DEBUG DatabaseManager: Migrando a versión 4...")
+            let addIssuerId = "ALTER TABLE invoices ADD COLUMN issuerId INTEGER DEFAULT NULL;"
+            sqlite3_exec(db, addIssuerId, nil, nil, nil)
+            
+            setDBVersion(4)
+        }
+
+        // ============= Versión 5 =============
+        // Asegurar la tabla app_settings aunque partamos de versión 4
+        // (así se crea si no existía, para que setSettingValue / getSettingValue funcionen)
+        if currentVersion < 5 {
+            print("DEBUG DatabaseManager: Migrando a versión 5 (asegurar app_settings)...")
+            
+            let createSettingsTable = """
+            CREATE TABLE IF NOT EXISTS app_settings(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                settingKey TEXT NOT NULL UNIQUE,
+                settingValue TEXT
+            );
+            """
+            sqlite3_exec(db, createSettingsTable, nil, nil, nil)
+            
+            // Insertar por defecto (si no existen) las 5 etiquetas principales
+            let defaultLabels = [
+                ("column_concept_label",   "Concepto"),
+                ("column_model_label",     "Modelo"),
+                ("column_bastidor_label",  "Bastidor"),
+                ("column_date_label",      "Fecha"),
+                ("column_amount_label",    "Importe")
+            ]
+            for (key, val) in defaultLabels {
+                let insert = """
+                INSERT OR IGNORE INTO app_settings (settingKey, settingValue)
+                VALUES ('\(key)', '\(val)');
+                """
+                sqlite3_exec(db, insert, nil, nil, nil)
+            }
+
+            setDBVersion(5)
+        }
+        
+        print("DEBUG DatabaseManager: Migraciones completadas. Versión final = \(getDBVersion())")
+    }
+    
+    private func getDBVersion() -> Int {
+        var version: Int32 = 0
+        let query = "PRAGMA user_version;"
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK {
+            if sqlite3_step(statement) == SQLITE_ROW {
+                version = sqlite3_column_int(statement, 0)
+            }
+        }
+        sqlite3_finalize(statement)
+        return Int(version)
+    }
+    
+    private func setDBVersion(_ newVersion: Int) {
+        let query = "PRAGMA user_version = \(newVersion);"
+        sqlite3_exec(db, query, nil, nil, nil)
+        print("DEBUG DatabaseManager: DB schema version actualizada a \(newVersion)")
+    }
+    
+    // =========================================================================
+    //  AQUI ABAJO: El mismo CRUD de Facturas y Clientes que ya tenías,
+    //  con la adición de issuerId para las facturas.
+    // =========================================================================
+    
+    // MARK: - CRUD de Facturas
+    func insertInvoice(_ invoice: Invoice) {
+        print("DEBUG DatabaseManager: insertInvoice() -> \(invoice)")
+        
+        // Ahora añadimos issuerId al final
+        let sql = """
+        INSERT INTO invoices
+        (invoiceNumber, invoiceDate, issuerName, issuerAddress, issuerNIF,
+         clientName, clientAddress, clientNIF, observaciones,
+         ivaPercentage, irpfPercentage, baseImponible, totalIVA, totalIRPF, totalFactura,
+         issuerId)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """
+        
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            
+            sqlite3_bind_int(statement,    1, Int32(invoice.invoiceNumber))
+            sqlite3_bind_text(statement,   2, invoice.invoiceDate,    -1, transient)
+            sqlite3_bind_text(statement,   3, invoice.issuerName,     -1, transient)
+            sqlite3_bind_text(statement,   4, invoice.issuerAddress,  -1, transient)
+            sqlite3_bind_text(statement,   5, invoice.issuerNIF,      -1, transient)
+            
+            sqlite3_bind_text(statement,   6, invoice.clientName,     -1, transient)
+            sqlite3_bind_text(statement,   7, invoice.clientAddress,  -1, transient)
+            sqlite3_bind_text(statement,   8, invoice.clientNIF,      -1, transient)
+            sqlite3_bind_text(statement,   9, invoice.observaciones,  -1, transient)
+            
+            sqlite3_bind_double(statement, 10, invoice.ivaPercentage)
+            sqlite3_bind_double(statement, 11, invoice.irpfPercentage)
+            sqlite3_bind_double(statement, 12, invoice.baseImponible)
+            sqlite3_bind_double(statement, 13, invoice.totalIVA)
+            sqlite3_bind_double(statement, 14, invoice.totalIRPF)
+            sqlite3_bind_double(statement, 15, invoice.totalFactura)
+            
+            // Nuevo: issuerId
+            sqlite3_bind_int(statement,    16, Int32(invoice.issuerId ?? 0))
+            
+            let stepResult = sqlite3_step(statement)
+            if stepResult == SQLITE_DONE {
+                print("DEBUG DatabaseManager: Factura insertada con éxito")
+                let newID = sqlite3_last_insert_rowid(db)
+                // Insertar items
+                for item in invoice.items {
+                    insertInvoiceItem(item, invoiceId: Int(newID))
+                }
+            } else {
+                let err = sqlite3_errmsg(db).map(String.init) ?? "desconocido"
+                print("ERROR DatabaseManager: Error insertando invoice: \(err)")
+            }
+        }
+        sqlite3_finalize(statement)
+        
+        fetchAllInvoices()
+    }
+    
+    private func insertInvoiceItem(_ item: InvoiceItem, invoiceId: Int) {
+        print("DEBUG DatabaseManager: insertInvoiceItem() -> invoiceId=\(invoiceId), item=\(item)")
+        
+        let sql = """
+        INSERT INTO invoice_items
+        (invoiceId, concept, model, bastidor, itemDate, amount)
+        VALUES (?, ?, ?, ?, ?, ?);
+        """
+        
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            
+            sqlite3_bind_int(statement,    1, Int32(invoiceId))
+            sqlite3_bind_text(statement,   2, item.concept,   -1, transient)
+            sqlite3_bind_text(statement,   3, item.model,     -1, transient)
+            sqlite3_bind_text(statement,   4, item.bastidor,  -1, transient)
+            sqlite3_bind_text(statement,   5, item.date,      -1, transient)
+            sqlite3_bind_double(statement, 6, item.amount)
+            
+            let stepResult = sqlite3_step(statement)
+            if stepResult == SQLITE_DONE {
+                print("DEBUG DatabaseManager: Item insertado correctamente")
+            } else {
+                let err = sqlite3_errmsg(db).map(String.init) ?? "desconocido"
+                print("ERROR DatabaseManager: Error insertando item: \(err)")
+            }
+        }
+        sqlite3_finalize(statement)
+    }
+    
+    func fetchAllInvoices() {
+        print("DEBUG DatabaseManager: fetchAllInvoices()")
+        invoices.removeAll()
+        
+        let sql = "SELECT * FROM invoices ORDER BY invoiceNumber DESC;"
+        var statement: OpaquePointer?
+        
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            while sqlite3_step(statement) == SQLITE_ROW {
+                
+                // Columnas: 0..15 y la 16 = issuerId (añadida en version 4)
+                let id            = sqlite3_column_int(statement, 0)
+                let invoiceNumber = sqlite3_column_int(statement, 1)
+                
+                guard
+                    let invoiceDatePtr   = sqlite3_column_text(statement, 2),
+                    let issuerNamePtr    = sqlite3_column_text(statement, 3),
+                    let issuerAddressPtr = sqlite3_column_text(statement, 4),
+                    let issuerNIFPtr     = sqlite3_column_text(statement, 5),
+                    let clientNamePtr    = sqlite3_column_text(statement, 6),
+                    let clientAddressPtr = sqlite3_column_text(statement, 7),
+                    let clientNIFPtr     = sqlite3_column_text(statement, 8)
+                else {
+                    print("DEBUG DatabaseManager: Faltan columnas en 'invoices'?")
+                    continue
+                }
+                
+                let observacionesPtr = sqlite3_column_text(statement, 9)
+                
+                let invoiceDate   = String(cString: invoiceDatePtr)
+                let issuerName    = String(cString: issuerNamePtr)
+                let issuerAddress = String(cString: issuerAddressPtr)
+                let issuerNIF     = String(cString: issuerNIFPtr)
+                let clientName    = String(cString: clientNamePtr)
+                let clientAddress = String(cString: clientAddressPtr)
+                let clientNIF     = String(cString: clientNIFPtr)
+                
+                let observaciones = observacionesPtr != nil
+                    ? String(cString: observacionesPtr!)
+                    : ""
+                
+                let ivaPercentage  = sqlite3_column_double(statement, 10)
+                let irpfPercentage = sqlite3_column_double(statement, 11)
+                let baseImponible  = sqlite3_column_double(statement, 12)
+                let totalIVA       = sqlite3_column_double(statement, 13)
+                let totalIRPF      = sqlite3_column_double(statement, 14)
+                let totalFactura   = sqlite3_column_double(statement, 15)
+                
+                // Leer issuerId (col 16), si no existe vendrá 0
+                let rawIssuerId = sqlite3_column_int(statement, 16)
+                let invoiceIssuerId: Int? = (rawIssuerId == 0) ? nil : Int(rawIssuerId)
+                
+                let items = fetchItems(forInvoiceId: Int(id))
+                
+                let invoice = Invoice(
+                    id: Int(id),
+                    issuerId: invoiceIssuerId,
+                    invoiceNumber: Int(invoiceNumber),
+                    invoiceDate: invoiceDate,
+                    issuerName: issuerName,
+                    issuerAddress: issuerAddress,
+                    issuerNIF: issuerNIF,
+                    clientName: clientName,
+                    clientAddress: clientAddress,
+                    clientNIF: clientNIF,
+                    observaciones: observaciones,
+                    items: items,
+                    ivaPercentage: ivaPercentage,
+                    irpfPercentage: irpfPercentage,
+                    baseImponible: baseImponible,
+                    totalIVA: totalIVA,
+                    totalIRPF: totalIRPF,
+                    totalFactura: totalFactura
+                )
+                invoices.append(invoice)
+            }
+        }
+        sqlite3_finalize(statement)
+        
+        print("DEBUG DatabaseManager: fetchAllInvoices -> \(invoices.count) facturas")
+    }
+    
+    private func fetchItems(forInvoiceId invoiceId: Int) -> [InvoiceItem] {
+        print("DEBUG DatabaseManager: fetchItems(forInvoiceId: \(invoiceId))")
+        var results: [InvoiceItem] = []
+        
+        let sql = """
+        SELECT id, concept, model, bastidor, itemDate, amount
+        FROM invoice_items
+        WHERE invoiceId = \(invoiceId);
+        """
+        var statement: OpaquePointer?
+        
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            while sqlite3_step(statement) == SQLITE_ROW {
+                let itemId = sqlite3_column_int(statement, 0)
+                guard
+                    let conceptPtr   = sqlite3_column_text(statement, 1),
+                    let modelPtr     = sqlite3_column_text(statement, 2),
+                    let bastidorPtr  = sqlite3_column_text(statement, 3),
+                    let datePtr      = sqlite3_column_text(statement, 4)
+                else {
+                    continue
+                }
+                
+                let concept  = String(cString: conceptPtr)
+                let model    = String(cString: modelPtr)
+                let bastidor = String(cString: bastidorPtr)
+                let date     = String(cString: datePtr)
+                let amount   = sqlite3_column_double(statement, 5)
+                
+                let item = InvoiceItem(
+                    id: Int(itemId),
+                    localUUID: UUID(),
+                    concept: concept,
+                    model: model,
+                    bastidor: bastidor,
+                    date: date,
+                    amount: amount
+                )
+                results.append(item)
+            }
+        }
+        sqlite3_finalize(statement)
+        return results
+    }
+    
+    func updateInvoice(_ invoice: Invoice) {
+        print("DEBUG DatabaseManager: updateInvoice() -> \(invoice)")
+        guard let rowId = invoice.id else { return }
+        
+        // Añadimos issuerId al final del SET
+        let sql = """
+        UPDATE invoices
+        SET invoiceNumber = ?, invoiceDate = ?, issuerName = ?, issuerAddress = ?, issuerNIF = ?,
+            clientName = ?, clientAddress = ?, clientNIF = ?, observaciones = ?,
+            ivaPercentage = ?, irpfPercentage = ?, baseImponible = ?, totalIVA = ?, totalIRPF = ?, totalFactura = ?,
+            issuerId = ?
+        WHERE id = ?;
+        """
+        
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            let t = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            
+            sqlite3_bind_int(statement, 1, Int32(invoice.invoiceNumber))
+            sqlite3_bind_text(statement, 2, invoice.invoiceDate,   -1, t)
+            sqlite3_bind_text(statement, 3, invoice.issuerName,    -1, t)
+            sqlite3_bind_text(statement, 4, invoice.issuerAddress, -1, t)
+            sqlite3_bind_text(statement, 5, invoice.issuerNIF,     -1, t)
+            
+            sqlite3_bind_text(statement, 6, invoice.clientName,     -1, t)
+            sqlite3_bind_text(statement, 7, invoice.clientAddress,  -1, t)
+            sqlite3_bind_text(statement, 8, invoice.clientNIF,      -1, t)
+            sqlite3_bind_text(statement, 9, invoice.observaciones,  -1, t)
+            
+            sqlite3_bind_double(statement, 10, invoice.ivaPercentage)
+            sqlite3_bind_double(statement, 11, invoice.irpfPercentage)
+            sqlite3_bind_double(statement, 12, invoice.baseImponible)
+            sqlite3_bind_double(statement, 13, invoice.totalIVA)
+            sqlite3_bind_double(statement, 14, invoice.totalIRPF)
+            sqlite3_bind_double(statement, 15, invoice.totalFactura)
+            
+            // issuerId
+            sqlite3_bind_int(statement, 16, Int32(invoice.issuerId ?? 0))
+            
+            // id
+            sqlite3_bind_int(statement, 17, Int32(rowId))
+            
+            let stepResult = sqlite3_step(statement)
+            if stepResult != SQLITE_DONE {
+                let err = sqlite3_errmsg(db).map(String.init) ?? "desconocido"
+                print("ERROR DatabaseManager: Al actualizar invoice: \(err)")
+            }
+        }
+        sqlite3_finalize(statement)
+        
+        // Borrar items antiguos
+        let deleteItems = "DELETE FROM invoice_items WHERE invoiceId = \(rowId);"
+        sqlite3_exec(db, deleteItems, nil, nil, nil)
+        
+        // Insertar items nuevos
+        for item in invoice.items {
+            insertInvoiceItem(item, invoiceId: rowId)
+        }
+        
+        fetchAllInvoices()
+    }
+    
+    func deleteInvoice(_ invoice: Invoice) {
+        print("DEBUG DatabaseManager: deleteInvoice() -> \(invoice)")
+        guard let rowId = invoice.id else { return }
+        
+        let sqlInvoice = "DELETE FROM invoices WHERE id = \(rowId);"
+        let sqlItems   = "DELETE FROM invoice_items WHERE invoiceId = \(rowId);"
+        
+        sqlite3_exec(db, sqlInvoice, nil, nil, nil)
+        sqlite3_exec(db, sqlItems,   nil, nil, nil)
+        
+        fetchAllInvoices()
+    }
+    
+    func getNextInvoiceNumber() -> Int {
+        print("DEBUG DatabaseManager: getNextInvoiceNumber()")
+        let sql = "SELECT MAX(invoiceNumber) FROM invoices;"
+        var statement: OpaquePointer?
+        var maxNumber: Int32 = 0
+        
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            if sqlite3_step(statement) == SQLITE_ROW {
+                maxNumber = sqlite3_column_int(statement, 0)
+            }
+        }
+        sqlite3_finalize(statement)
+        return Int(maxNumber) + 1
+    }
+    
+    // MARK: - CRUD de Clientes
+    func insertClient(_ client: Client) {
+        print("DEBUG DatabaseManager: insertClient() -> \(client)")
+        
+        let sql = """
+        INSERT INTO clients
+        (name, address, nif, nick)
+        VALUES (?, ?, ?, ?);
+        """
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            let t = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            sqlite3_bind_text(statement, 1, client.name,    -1, t)
+            sqlite3_bind_text(statement, 2, client.address, -1, t)
+            sqlite3_bind_text(statement, 3, client.nif,     -1, t)
+            sqlite3_bind_text(statement, 4, client.nick,    -1, t)
+            
+            sqlite3_step(statement)
+        }
+        sqlite3_finalize(statement)
+        fetchAllClients()
+    }
+    
+    func fetchAllClients() {
+        print("DEBUG DatabaseManager: fetchAllClients()")
+        clients.removeAll()
+        
+        let sql = "SELECT id, name, address, nif, nick FROM clients ORDER BY name ASC;"
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            while sqlite3_step(statement) == SQLITE_ROW {
+                let id        = sqlite3_column_int(statement, 0)
+                let namePtr   = sqlite3_column_text(statement, 1)
+                let addrPtr   = sqlite3_column_text(statement, 2)
+                let nifPtr    = sqlite3_column_text(statement, 3)
+                let nickPtr   = sqlite3_column_text(statement, 4)
+                
+                let name  = namePtr  != nil ? String(cString: namePtr!)  : ""
+                let addr  = addrPtr  != nil ? String(cString: addrPtr!)  : ""
+                let nif   = nifPtr   != nil ? String(cString: nifPtr!)   : ""
+                let nick  = nickPtr  != nil ? String(cString: nickPtr!)  : ""
+                
+                let c = Client(
+                    id: Int(id),
+                    name: name,
+                    address: addr,
+                    nif: nif,
+                    nick: nick
+                )
+                clients.append(c)
+            }
+        }
+        sqlite3_finalize(statement)
+        print("DEBUG DatabaseManager: fetchAllClients -> \(clients.count) clientes")
+    }
+    
+    func updateClient(_ client: Client) {
+        print("DEBUG DatabaseManager: updateClient() -> \(client)")
+        guard let rowId = client.id else { return }
+        
+        let sql = """
+        UPDATE clients
+        SET name = ?, address = ?, nif = ?, nick = ?
+        WHERE id = ?;
+        """
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            let t = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            sqlite3_bind_text(statement, 1, client.name,    -1, t)
+            sqlite3_bind_text(statement, 2, client.address, -1, t)
+            sqlite3_bind_text(statement, 3, client.nif,     -1, t)
+            sqlite3_bind_text(statement, 4, client.nick,    -1, t)
+            sqlite3_bind_int(statement, 5, Int32(rowId))
+            
+            sqlite3_step(statement)
+        }
+        sqlite3_finalize(statement)
+        fetchAllClients()
+    }
+    
+    func deleteClient(_ client: Client) {
+        print("DEBUG DatabaseManager: deleteClient() -> \(client)")
+        guard let rowId = client.id else { return }
+        
+        let sql = "DELETE FROM clients WHERE id = \(rowId);"
+        sqlite3_exec(db, sql, nil, nil, nil)
+        fetchAllClients()
+    }
+    
+    // =========================================================================
+    //  CRUD de Issuers (emisores)
+    // =========================================================================
+    func insertIssuer(name: String, address: String, nif: String, phone: String) {
+        let sql = "INSERT INTO issuers (name, address, nif, phone) VALUES (?, ?, ?, ?);"
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            let t = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            sqlite3_bind_text(statement, 1, name,    -1, t)
+            sqlite3_bind_text(statement, 2, address, -1, t)
+            sqlite3_bind_text(statement, 3, nif,     -1, t)
+            sqlite3_bind_text(statement, 4, phone,   -1, t)
+            sqlite3_step(statement)
+        }
+        sqlite3_finalize(statement)
+    }
+    
+    func fetchAllIssuers() -> [Issuer] {
+        var issuers: [Issuer] = []
+        let sql = "SELECT id, name, address, nif, phone FROM issuers;"
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            while sqlite3_step(statement) == SQLITE_ROW {
+                let id   = sqlite3_column_int(statement, 0)
+                let namePtr    = sqlite3_column_text(statement, 1)
+                let addrPtr    = sqlite3_column_text(statement, 2)
+                let nifPtr     = sqlite3_column_text(statement, 3)
+                let phonePtr   = sqlite3_column_text(statement, 4)
+                
+                let issuer = Issuer(
+                    id: Int(id),
+                    name:    namePtr   != nil ? String(cString: namePtr!)   : "",
+                    address: addrPtr   != nil ? String(cString: addrPtr!)   : "",
+                    nif:     nifPtr    != nil ? String(cString: nifPtr!)    : "",
+                    phone:   phonePtr  != nil ? String(cString: phonePtr!)  : ""
+                )
+                issuers.append(issuer)
+            }
+        }
+        sqlite3_finalize(statement)
+        return issuers
+    }
+    
+    func updateIssuer(_ issuer: Issuer) {
+        guard let rowId = issuer.id else { return }
+        let sql = """
+        UPDATE issuers
+        SET name = ?, address = ?, nif = ?, phone = ?
+        WHERE id = ?;
+        """
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            let t = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            sqlite3_bind_text(statement, 1, issuer.name,    -1, t)
+            sqlite3_bind_text(statement, 2, issuer.address, -1, t)
+            sqlite3_bind_text(statement, 3, issuer.nif,     -1, t)
+            sqlite3_bind_text(statement, 4, issuer.phone,   -1, t)
+            sqlite3_bind_int(statement, 5, Int32(rowId))
+            sqlite3_step(statement)
+        }
+        sqlite3_finalize(statement)
+    }
+    
+    func deleteIssuer(_ issuer: Issuer) {
+        guard let rowId = issuer.id else { return }
+        let sql = "DELETE FROM issuers WHERE id = \(rowId);"
+        sqlite3_exec(db, sql, nil, nil, nil)
+    }
+    
+    // =========================================================================
+    //  CRUD de Servicios (services)
+    // =========================================================================
+    func insertService(_ service: Service) {
+        let sql = """
+        INSERT INTO services (serviceName, serviceDescription, servicePrice)
+        VALUES (?, ?, ?);
+        """
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            let t = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            sqlite3_bind_text(statement, 1, service.serviceName,        -1, t)
+            sqlite3_bind_text(statement, 2, service.serviceDescription, -1, t)
+            sqlite3_bind_double(statement, 3, service.servicePrice)
+            sqlite3_step(statement)
+        }
+        sqlite3_finalize(statement)
+    }
+    
+    func fetchAllServices() -> [Service] {
+        var results: [Service] = []
+        let sql = "SELECT id, serviceName, serviceDescription, servicePrice FROM services;"
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            while sqlite3_step(statement) == SQLITE_ROW {
+                let id = sqlite3_column_int(statement, 0)
+                let namePtr = sqlite3_column_text(statement, 1)
+                let descPtr = sqlite3_column_text(statement, 2)
+                let price   = sqlite3_column_double(statement, 3)
+                
+                let s = Service(
+                    id: Int(id),
+                    serviceName:        namePtr != nil ? String(cString: namePtr!) : "",
+                    serviceDescription: descPtr != nil ? String(cString: descPtr!) : "",
+                    servicePrice:       price
+                )
+                results.append(s)
+            }
+        }
+        sqlite3_finalize(statement)
+        return results
+    }
+    
+    func updateService(_ service: Service) {
+        guard let rowId = service.id else { return }
+        let sql = """
+        UPDATE services
+        SET serviceName = ?, serviceDescription = ?, servicePrice = ?
+        WHERE id = ?;
+        """
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            let t = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            sqlite3_bind_text(statement, 1, service.serviceName,        -1, t)
+            sqlite3_bind_text(statement, 2, service.serviceDescription, -1, t)
+            sqlite3_bind_double(statement, 3, service.servicePrice)
+            sqlite3_bind_int(statement, 4, Int32(rowId))
+            sqlite3_step(statement)
+        }
+        sqlite3_finalize(statement)
+    }
+    
+    func deleteService(_ service: Service) {
+        guard let rowId = service.id else { return }
+        let sql = "DELETE FROM services WHERE id = \(rowId);"
+        sqlite3_exec(db, sql, nil, nil, nil)
+    }
+    
+    // =========================================================================
+    //  CRUD de Gastos (expenses)
+    // =========================================================================
+    func insertExpense(concept: String, expenseDate: String, amount: Double) {
+        let sql = "INSERT INTO expenses (concept, expenseDate, amount) VALUES (?, ?, ?);"
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            let t = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            sqlite3_bind_text(statement, 1, concept,     -1, t)
+            sqlite3_bind_text(statement, 2, expenseDate, -1, t)
+            sqlite3_bind_double(statement, 3, amount)
+            sqlite3_step(statement)
+        }
+        sqlite3_finalize(statement)
+    }
+    
+    func fetchAllExpenses() -> [Expense] {
+        var results: [Expense] = []
+        let sql = "SELECT id, concept, expenseDate, amount FROM expenses ORDER BY expenseDate DESC;"
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            while sqlite3_step(statement) == SQLITE_ROW {
+                let id     = sqlite3_column_int(statement, 0)
+                let cPtr   = sqlite3_column_text(statement, 1)
+                let dPtr   = sqlite3_column_text(statement, 2)
+                let amount = sqlite3_column_double(statement, 3)
+                
+                let e = Expense(
+                    id: Int(id),
+                    concept:    cPtr != nil ? String(cString: cPtr!) : "",
+                    expenseDate: dPtr != nil ? String(cString: dPtr!) : "",
+                    amount:     amount
+                )
+                results.append(e)
+            }
+        }
+        sqlite3_finalize(statement)
+        return results
+    }
+    
+    func updateExpense(_ expense: Expense) {
+        guard let rowId = expense.id else { return }
+        let sql = """
+        UPDATE expenses
+        SET concept = ?, expenseDate = ?, amount = ?
+        WHERE id = ?;
+        """
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            let t = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            sqlite3_bind_text(statement, 1, expense.concept,     -1, t)
+            sqlite3_bind_text(statement, 2, expense.expenseDate, -1, t)
+            sqlite3_bind_double(statement, 3, expense.amount)
+            sqlite3_bind_int(statement, 4, Int32(rowId))
+            sqlite3_step(statement)
+        }
+        sqlite3_finalize(statement)
+    }
+    
+    func deleteExpense(_ expense: Expense) {
+        guard let rowId = expense.id else { return }
+        let sql = "DELETE FROM expenses WHERE id = \(rowId);"
+        sqlite3_exec(db, sql, nil, nil, nil)
+    }
+    
+    // =========================================================================
+    //  CRUD de Presupuestos (budgets)
+    // =========================================================================
+    func insertBudget(_ budget: Budget) {
+        let sql = """
+        INSERT INTO budgets
+        (budgetNumber, budgetDate, issuerId, clientId, observaciones,
+         ivaPercentage, irpfPercentage, baseImponible, totalIVA, totalIRPF, totalBudget)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            let t = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            
+            sqlite3_bind_int(statement,   1, Int32(budget.budgetNumber))
+            sqlite3_bind_text(statement,  2, budget.budgetDate,   -1, t)
+            sqlite3_bind_int(statement,   3, Int32(budget.issuerId))
+            sqlite3_bind_int(statement,   4, Int32(budget.clientId))
+            sqlite3_bind_text(statement,  5, budget.observaciones, -1, t)
+            
+            sqlite3_bind_double(statement, 6,  budget.ivaPercentage)
+            sqlite3_bind_double(statement, 7,  budget.irpfPercentage)
+            sqlite3_bind_double(statement, 8,  budget.baseImponible)
+            sqlite3_bind_double(statement, 9,  budget.totalIVA)
+            sqlite3_bind_double(statement, 10, budget.totalIRPF)
+            sqlite3_bind_double(statement, 11, budget.totalBudget)
+            
+            if sqlite3_step(statement) == SQLITE_DONE {
+                let newId = Int(sqlite3_last_insert_rowid(db))
+                // Insertar items
+                for item in budget.items {
+                    insertBudgetItem(item, budgetId: newId)
+                }
+            }
+        }
+        sqlite3_finalize(statement)
+    }
+    
+    private func insertBudgetItem(_ item: BudgetItem, budgetId: Int) {
+        let sql = """
+        INSERT INTO budget_items
+        (budgetId, concept, model, bastidor, itemDate, amount)
+        VALUES (?, ?, ?, ?, ?, ?);
+        """
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            let t = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            sqlite3_bind_int(statement,    1, Int32(budgetId))
+            sqlite3_bind_text(statement,   2, item.concept,   -1, t)
+            sqlite3_bind_text(statement,   3, item.model,     -1, t)
+            sqlite3_bind_text(statement,   4, item.bastidor,  -1, t)
+            sqlite3_bind_text(statement,   5, item.itemDate,  -1, t)
+            sqlite3_bind_double(statement, 6, item.amount)
+            sqlite3_step(statement)
+        }
+        sqlite3_finalize(statement)
+    }
+    
+    func fetchAllBudgets() -> [Budget] {
+        var results: [Budget] = []
+        let sql = "SELECT * FROM budgets ORDER BY budgetNumber DESC;"
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            while sqlite3_step(statement) == SQLITE_ROW {
+                let id           = sqlite3_column_int(statement, 0)
+                let budgetNumber = sqlite3_column_int(statement, 1)
+                guard let datePtr = sqlite3_column_text(statement, 2) else { continue }
+                
+                let issuerId  = sqlite3_column_int(statement, 3)
+                let clientId  = sqlite3_column_int(statement, 4)
+                let obsPtr    = sqlite3_column_text(statement, 5)
+                let ivaP      = sqlite3_column_double(statement, 6)
+                let irpfP     = sqlite3_column_double(statement, 7)
+                let baseImp   = sqlite3_column_double(statement, 8)
+                let tIva      = sqlite3_column_double(statement, 9)
+                let tIrpf     = sqlite3_column_double(statement, 10)
+                let tBudget   = sqlite3_column_double(statement, 11)
+                
+                let budgetDate    = String(cString: datePtr)
+                let observaciones = obsPtr != nil ? String(cString: obsPtr!) : ""
+                
+                let items = fetchBudgetItems(budgetId: Int(id))
+                let b = Budget(
+                    id: Int(id),
+                    budgetNumber: Int(budgetNumber),
+                    budgetDate: budgetDate,
+                    issuerId: Int(issuerId),
+                    clientId: Int(clientId),
+                    observaciones: observaciones,
+                    items: items,
+                    ivaPercentage: ivaP,
+                    irpfPercentage: irpfP,
+                    baseImponible: baseImp,
+                    totalIVA: tIva,
+                    totalIRPF: tIrpf,
+                    totalBudget: tBudget
+                )
+                results.append(b)
+            }
+        }
+        sqlite3_finalize(statement)
+        return results
+    }
+    
+    private func fetchBudgetItems(budgetId: Int) -> [BudgetItem] {
+        var items: [BudgetItem] = []
+        let sql = """
+        SELECT id, concept, model, bastidor, itemDate, amount
+        FROM budget_items
+        WHERE budgetId = \(budgetId);
+        """
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            while sqlite3_step(statement) == SQLITE_ROW {
+                let itemId   = sqlite3_column_int(statement, 0)
+                let cPtr     = sqlite3_column_text(statement, 1)
+                let mPtr     = sqlite3_column_text(statement, 2)
+                let bPtr     = sqlite3_column_text(statement, 3)
+                let dPtr     = sqlite3_column_text(statement, 4)
+                let amount   = sqlite3_column_double(statement, 5)
+                
+                let item = BudgetItem(
+                    id: Int(itemId),
+                    concept:   cPtr != nil ? String(cString: cPtr!) : "",
+                    model:     mPtr != nil ? String(cString: mPtr!) : "",
+                    bastidor:  bPtr != nil ? String(cString: bPtr!) : "",
+                    itemDate:  dPtr != nil ? String(cString: dPtr!) : "",
+                    amount:    amount
+                )
+                items.append(item)
+            }
+        }
+        sqlite3_finalize(statement)
+        return items
+    }
+    
+    func updateBudget(_ budget: Budget) {
+        print("DEBUG DatabaseManager: updateBudget() -> \(budget)")
+        guard let rowId = budget.id else { return }
+        
+        let sql = """
+        UPDATE budgets
+        SET budgetNumber = ?, budgetDate = ?, issuerId = ?, clientId = ?, observaciones = ?,
+            ivaPercentage = ?, irpfPercentage = ?, baseImponible = ?, totalIVA = ?, totalIRPF = ?, totalBudget = ?
+        WHERE id = ?;
+        """
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            let t = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            
+            sqlite3_bind_int(statement,   1, Int32(budget.budgetNumber))
+            sqlite3_bind_text(statement,  2, budget.budgetDate,   -1, t)
+            sqlite3_bind_int(statement,   3, Int32(budget.issuerId))
+            sqlite3_bind_int(statement,   4, Int32(budget.clientId))
+            sqlite3_bind_text(statement,  5, budget.observaciones, -1, t)
+            
+            sqlite3_bind_double(statement, 6,  budget.ivaPercentage)
+            sqlite3_bind_double(statement, 7,  budget.irpfPercentage)
+            sqlite3_bind_double(statement, 8,  budget.baseImponible)
+            sqlite3_bind_double(statement, 9,  budget.totalIVA)
+            sqlite3_bind_double(statement, 10, budget.totalIRPF)
+            sqlite3_bind_double(statement, 11, budget.totalBudget)
+            
+            sqlite3_bind_int(statement,   12, Int32(rowId))
+            
+            let stepRes = sqlite3_step(statement)
+            if stepRes != SQLITE_DONE {
+                let err = sqlite3_errmsg(db).map(String.init) ?? "desconocido"
+                print("ERROR DatabaseManager: updateBudget -> \(err)")
+            }
+        }
+        sqlite3_finalize(statement)
+        
+        // Borramos sus items
+        let deleteItems = "DELETE FROM budget_items WHERE budgetId = \(rowId);"
+        sqlite3_exec(db, deleteItems, nil, nil, nil)
+        
+        // Insertar items de nuevo
+        for item in budget.items {
+            insertBudgetItem(item, budgetId: rowId)
+        }
+        
+        print("DEBUG DatabaseManager: Presupuesto actualizado id=\(rowId)")
+    }
+    
+    func deleteBudget(_ budget: Budget) {
+        print("DEBUG DatabaseManager: deleteBudget() -> \(budget)")
+        guard let rowId = budget.id else {
+            print("DEBUG DatabaseManager: Budget sin 'id', no se puede borrar.")
+            return
+        }
+        
+        let sqlBudget = "DELETE FROM budgets WHERE id = \(rowId);"
+        let sqlItems  = "DELETE FROM budget_items WHERE budgetId = \(rowId);"
+        
+        sqlite3_exec(db, sqlBudget, nil, nil, nil)
+        sqlite3_exec(db, sqlItems,  nil, nil, nil)
+        
+        print("DEBUG DatabaseManager: Presupuesto borrado id=\(rowId)")
+        
+        // Autorefrescar tras borrar
+        fetchAllBudgets()
+    }
+    
+    // MARK: - app_settings (ej. para columnas personalizables)
+    func getSettingValue(forKey key: String) -> String {
+        let sql = "SELECT settingValue FROM app_settings WHERE settingKey = ?;"
+        var statement: OpaquePointer?
+        var result = ""
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            // Usamos destructor 'transient' en vez de nil
+            let t = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            sqlite3_bind_text(statement, 1, key, -1, t)
+            
+            if sqlite3_step(statement) == SQLITE_ROW {
+                if let valPtr = sqlite3_column_text(statement, 0) {
+                    result = String(cString: valPtr)
+                    print("DEBUG getSettingValue(\(key)) => result=\(result)")
+                }
+            }
+        }
+        sqlite3_finalize(statement)
+        return result
+    }
+    
+    func setSettingValue(_ value: String, forKey key: String) {
+        print("DEBUG DatabaseManager: setSettingValue(\(value), forKey: \(key))")
+        let sql = """
+        INSERT OR REPLACE INTO app_settings (settingKey, settingValue)
+        VALUES (?, ?);
+        """
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            // Usamos destructor 'transient' en vez de nil
+            let t = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            
+            sqlite3_bind_text(statement, 1, key,   -1, t)
+            sqlite3_bind_text(statement, 2, value, -1, t)
+            
+            sqlite3_step(statement)
+        }
+        sqlite3_finalize(statement)
+        print("DEBUG DatabaseManager: setSettingValue FINISHED")
+    }
+    
+    // MARK: - Backup / Restore
+    func backupDatabase(to destinationURL: URL) -> Bool {
+        print("DEBUG DatabaseManager: backupDatabase(to: \(destinationURL.path))")
+        do {
+            let fileUrl = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            ).appendingPathComponent("MyInvoicesDB.sqlite")
+            
+            if FileManager.default.fileExists(atPath: destinationURL.path) {
+                try FileManager.default.removeItem(at: destinationURL)
+            }
+            try FileManager.default.copyItem(at: fileUrl, to: destinationURL)
+            print("DEBUG DatabaseManager: Backup completado con éxito")
+            return true
+        } catch {
+            print("ERROR DatabaseManager: backupDatabase -> \(error)")
+            return false
+        }
+    }
+    
+    func restoreDatabase(from sourceURL: URL) -> Bool {
+        print("DEBUG DatabaseManager: restoreDatabase(from: \(sourceURL.path))")
+        do {
+            // Cerrar la DB si está abierta
+            if db != nil {
+                sqlite3_close(db)
+                db = nil
+            }
+            // Ruta local
+            let fileUrl = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            ).appendingPathComponent("MyInvoicesDB.sqlite")
+            
+            // Borramos la BD actual (si existe)
+            if FileManager.default.fileExists(atPath: fileUrl.path) {
+                try FileManager.default.removeItem(at: fileUrl)
+            }
+            // Copiamos el fichero
+            try FileManager.default.copyItem(at: sourceURL, to: fileUrl)
+            
+            // Re-abrimos la DB y migramos
+            openDatabase()
+            checkAndPerformMigrations()
+            
+            // Recargamos datos
+            fetchAllInvoices()
+            fetchAllClients()
+            
+            print("DEBUG DatabaseManager: Restore completado con éxito")
+            return true
+        } catch {
+            print("ERROR DatabaseManager: restoreDatabase -> \(error)")
+            return false
+        }
+    }
+}
+
+-----
+
+codigo 2: (./MyInvoiceApp/App/MyInvoiceAppApp.swift)
+import SwiftUI
+
+@main
+struct MyInvoiceAppApp: App {
+    
+    @StateObject private var dbManager = DatabaseManager()
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .environmentObject(dbManager)
+                .frame(minWidth: 1000, minHeight: 700)
+        }
+    }
+}
+
+-----
+
+codigo 3: (./MyInvoiceApp/Model/Service.swift)
+// Service.swift
+struct Service: Identifiable, Equatable {
+    var id: Int?
+    var serviceName: String
+    var serviceDescription: String
+    var servicePrice: Double
+}
+
+-----
+
+codigo 4: (./MyInvoiceApp/Model/Invoice.swift)
+import Foundation
+
+struct Invoice: Identifiable, Equatable {
+    var id: Int? = nil
+    
+    // NUEVO: guardamos el id del emisor (si se elige)
+    var issuerId: Int? = nil
+    
+    // Información general
+    var invoiceNumber: Int
+    var invoiceDate: String
+    
+    // Datos del emisor
+    var issuerName: String
+    var issuerAddress: String
+    var issuerNIF: String
+    
+    // Datos del cliente
+    var clientName: String
+    var clientAddress: String
+    var clientNIF: String
+    
+    // Observaciones
+    var observaciones: String
+    
+    // Items
+    var items: [InvoiceItem]
+    
+    // Impuestos
+    var ivaPercentage: Double
+    var irpfPercentage: Double
+    
+    // Totales
+    var baseImponible: Double
+    var totalIVA: Double
+    var totalIRPF: Double
+    var totalFactura: Double
+}
+
+-----
+
+codigo 5: (./MyInvoiceApp/Model/InvoiceItem.swift)
+import Foundation
+
+struct InvoiceItem: Identifiable, Equatable {
+    var id: Int?
+    var localUUID = UUID()
+    
+    var concept: String
+    var model: String
+    var bastidor: String
+    var date: String
+    var amount: Double
+}
+
+-----
+
+codigo 6: (./MyInvoiceApp/Model/Issuer.swift)
+// Issuer.swift
+struct Issuer: Identifiable, Equatable {
+    var id: Int?
+    var name: String
+    var address: String
+    var nif: String
+    var phone: String
+}
+
+-----
+
+codigo 7: (./MyInvoiceApp/Model/Client.swift)
+import Foundation
+
+struct Client: Identifiable, Equatable {
+    var id: Int? = nil
+    var name: String
+    var address: String
+    var nif: String
+    var nick: String = ""  // ← Campo nuevo
+}
+
+-----
+
+codigo 8: (./MyInvoiceApp/Model/Budget.swift)
+// Budget.swift
+struct Budget: Identifiable, Equatable {
+    var id: Int?
+    var budgetNumber: Int
+    var budgetDate: String
+    var issuerId: Int
+    var clientId: Int
+    var observaciones: String
+    
+    var items: [BudgetItem]
+    
+    var ivaPercentage: Double
+    var irpfPercentage: Double
+    
+    var baseImponible: Double
+    var totalIVA: Double
+    var totalIRPF: Double
+    var totalBudget: Double
+}
+
+-----
+
+codigo 9: (./MyInvoiceApp/Model/BudgetItem.swift)
+// BudgetItem.swift
+struct BudgetItem: Identifiable, Equatable {
+    var id: Int?
+    var concept: String
+    var model: String
+    var bastidor: String
+    var itemDate: String
+    var amount: Double
+}
+
+-----
+
+codigo 10: (./MyInvoiceApp/Model/Expense.swift)
+// Expense.swift
+struct Expense: Identifiable, Equatable {
+    var id: Int?
+    var concept: String
+    var expenseDate: String
+    var amount: Double
+}
+
+-----
+
+codigo 11: (./MyInvoiceApp/Views/CreateInvoiceView.swift)
+import SwiftUI
+
+struct CreateInvoiceView: View {
+    @EnvironmentObject var dbManager: DatabaseManager
+    @Environment(\.dismiss) var dismiss
+    
+    var invoiceToEdit: Invoice?
+    
+    // Factura
+    @State private var invoiceNumber: Int = 0
+    @State private var invoiceDate: String = ""
+    
+    // Emisor
+    @State private var issuerName: String = ""
+    @State private var issuerAddress: String = ""
+    @State private var issuerNIF: String = ""
+    @State private var selectedIssuerId: Int? = nil  // ← nuevo
+
+    // Cliente
+    @State private var clientName: String = ""
+    @State private var clientAddress: String = ""
+    @State private var clientNIF: String = ""
+    @State private var selectedClientId: Int? = nil
+    
+    // Observaciones
+    @State private var observaciones: String = ""
+    
+    // IVA e IRPF
+    @State private var ivaPercentage: Double = 21.0
+    @State private var irpfPercentage: Double = 0.0
+    
+    // Items
+    @State private var items: [InvoiceItem] = []
+    
+    // Totales
+    @State private var baseImponible: Double = 0.0
+    @State private var totalIVA: Double = 0.0
+    @State private var totalIRPF: Double = 0.0
+    @State private var totalFactura: Double = 0.0
+    
+    // Para abrir la vista de clientes
+    @State private var showClientsView = false
+    
+    // Para editar columnas
+    @State private var showColumnsSettings = false
+    
+    // Para popover de servicios
+    @State private var showServicesPopOver = false
+    
+    // Column labels (cargadas/guardadas en app_settings)
+    @State private var labelConcept  = "Concepto"
+    @State private var labelModel    = "Modelo"
+    @State private var labelBastidor = "Bastidor"
+    @State private var labelDate     = "Fecha"
+    @State private var labelAmount   = "Importe"
+    
+    private var numberFormatter: NumberFormatter {
+        let nf = NumberFormatter()
+        nf.locale = Locale(identifier: "es_ES")
+        nf.numberStyle = .decimal
+        nf.minimumFractionDigits = 0
+        nf.maximumFractionDigits = 2
+        nf.usesGroupingSeparator = false
+        nf.generatesDecimalNumbers = true
+        return nf
+    }
+    
+    var body: some View {
+        // SCROLLVIEW para toda la pantalla
+        ScrollView([.vertical, .horizontal], showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 10) {
+                
+                Text(invoiceToEdit == nil ? "Nueva Factura" : "Editar Factura")
+                    .font(.title)
+                
+                // Datos de la factura
+                Group {
+                    Text("Datos de la factura").font(.headline)
+                    HStack {
+                        Text("N.º de factura:")
+                        TextField("", value: $invoiceNumber, formatter: NumberFormatter())
+                            .frame(width: 80)
+                    }
+                    HStack {
+                        Text("Fecha factura:")
+                        TextField("dd/MM/yyyy", text: $invoiceDate)
+                            .frame(width: 140)
+                    }
+                }
+                Divider()
+                
+                // Datos Emisor
+                Group {
+                    Text("Datos Emisor").font(.headline)
+                    
+                    // NUEVO PICKER (opcional)
+                    Picker("Seleccionar Emisor (guardado)", selection: $selectedIssuerId) {
+                        Text("-- Sin seleccionar --").tag(Int?.none)
+                        ForEach(dbManager.fetchAllIssuers()) { issuer in
+                            Text("\(issuer.name)")
+                                .tag(issuer.id as Int?)
+                        }
+                    }
+                    .onChange(of: selectedIssuerId) { newValue in
+                        if let emId = newValue,
+                           let found = dbManager.fetchAllIssuers().first(where: { $0.id == emId }) {
+                            issuerName = found.name
+                            issuerAddress = found.address
+                            issuerNIF = found.nif
+                        }
+                    }
+                    
+                    TextField("Razón Social / Nombre", text: $issuerName)
+                    TextField("Dirección", text: $issuerAddress)
+                    TextField("NIF/CIF", text: $issuerNIF)
+                }
+                Divider()
+                
+                // Datos Cliente
+                Group {
+                    Text("Datos Cliente").font(.headline)
+                    
+                    Picker("Seleccionar cliente guardado", selection: $selectedClientId) {
+                        Text("-- Sin seleccionar --").tag(Int?.none)
+                        ForEach(dbManager.clients) { client in
+                            if client.nick.isEmpty {
+                                Text(client.name).tag(client.id as Int?)
+                            } else {
+                                Text("\(client.name) (\(client.nick))")
+                                    .tag(client.id as Int?)
+                            }
+                        }
+                    }
+                    .onChange(of: selectedClientId) { newValue in
+                        if let cid = newValue,
+                           let found = dbManager.clients.first(where: { $0.id == cid }) {
+                            clientName = found.name
+                            clientAddress = found.address
+                            clientNIF = found.nif
+                        }
+                    }
+                    
+                    Button("Gestionar Clientes") {
+                        showClientsView = true
+                    }
+                    
+                    TextField("Razón Social / Nombre", text: $clientName)
+                    TextField("Dirección", text: $clientAddress)
+                    TextField("NIF/CIF", text: $clientNIF)
+                }
+                Divider()
+                
+                // Observaciones
+                Group {
+                    Text("Observaciones").font(.headline)
+                    TextEditor(text: $observaciones)
+                        .frame(minHeight: 60)
+                }
+                Divider()
+                
+                // CONCEPTOS
+                Group {
+                    HStack {
+                        Text("Conceptos de la Factura").font(.headline)
+                        Spacer()
+                        Button("Editar Columnas") {
+                            showColumnsSettings = true
+                        }
+                    }
+                    
+                    HStack {
+                        Button("Insertar Servicio") {
+                            showServicesPopOver = true
+                        }
+                        Spacer()
+                    }
+                    
+                    ScrollView(.vertical, showsIndicators: true) {
+                        VStack(spacing: 0) {
+                            // Cabecera
+                            HStack {
+                                Text(labelConcept)
+                                    .frame(width: 120, alignment: .leading)
+                                Text(labelModel)
+                                    .frame(width: 100, alignment: .leading)
+                                Text(labelBastidor)
+                                    .frame(width: 100, alignment: .leading)
+                                Text(labelDate)
+                                    .frame(width: 80, alignment: .leading)
+                                Text(labelAmount)
+                                    .frame(width: 80, alignment: .trailing)
+                                Spacer().frame(width: 30)
+                            }
+                            .font(.subheadline)
+                            .padding(.vertical, 4)
+                            
+                            Divider()
+                            
+                            // Filas
+                            ForEach($items, id: \.localUUID) { $item in
+                                HStack {
+                                    TextField("", text: $item.concept)
+                                        .frame(width: 120)
+                                    TextField("", text: $item.model)
+                                        .frame(width: 100)
+                                    TextField("", text: $item.bastidor)
+                                        .frame(width: 100)
+                                    TextField("", text: $item.date)
+                                        .frame(width: 80)
+                                    
+                                    TextField("", value: $item.amount, formatter: numberFormatter)
+                                        .frame(width: 80)
+                                        .multilineTextAlignment(.trailing)
+                                    
+                                    Button {
+                                        removeItem(item)
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                    .frame(width: 30, alignment: .center)
+                                }
+                                .padding(.vertical, 2)
+                            }
+                            
+                            // Añadir Fila
+                            Button("Añadir Fila") {
+                                let newItem = InvoiceItem(
+                                    id: nil,
+                                    localUUID: UUID(),
+                                    concept: "",
+                                    model: "",
+                                    bastidor: "",
+                                    date: "",
+                                    amount: 0.0
+                                )
+                                items.append(newItem)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    .border(Color.gray)
+                    .frame(minHeight: 200, maxHeight: 300)
+                }
+                Divider()
+                
+                // IMPUESTOS
+                Group {
+                    Text("Impuestos").font(.headline)
+                    HStack {
+                        Text("IVA (%)")
+                        TextField("", value: $ivaPercentage, formatter: numberFormatter)
+                            .frame(width: 60)
+                    }
+                    HStack {
+                        Text("IRPF (%)")
+                        TextField("", value: $irpfPercentage, formatter: numberFormatter)
+                            .frame(width: 60)
+                    }
+                }
+                Divider()
+                
+                // TOTALES
+                Group {
+                    Text("Totales").font(.headline)
+                    HStack {
+                        Text("Base Imponible:")
+                        Spacer()
+                        Text(String(format: "%.2f €", baseImponible))
+                    }
+                    HStack {
+                        Text("IVA (\(ivaPercentage, specifier: "%.2f")%)")
+                        Spacer()
+                        Text(String(format: "%.2f €", totalIVA))
+                    }
+                    HStack {
+                        Text("IRPF (\(irpfPercentage, specifier: "%.2f")%)")
+                        Spacer()
+                        Text(String(format: "%.2f €", totalIRPF))
+                    }
+                    HStack {
+                        Text("TOTAL Factura:")
+                            .fontWeight(.bold)
+                        Spacer()
+                        Text(String(format: "%.2f €", totalFactura))
+                            .fontWeight(.bold)
+                    }
+                }
+                
+                // Botón Guardar
+                HStack {
+                    Spacer()
+                    Button("Guardar") {
+                        saveInvoice()
+                    }
+                    .padding(.vertical, 6)
+                }
+                
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+        }
+        // Tamaño mínimo ventana
+        .frame(minWidth: 900, minHeight: 600)
+        
+        // HOJAS emergentes
+        .sheet(isPresented: $showClientsView) {
+            ClientsView()
+                .environmentObject(dbManager)
+        }
+        .sheet(isPresented: $showColumnsSettings, onDismiss: loadColumnLabels) {
+            ItemColumnsSettingsView()
+                .environmentObject(dbManager)
+        }
+        .popover(isPresented: $showServicesPopOver) {
+            ServicesPopoverView { selectedService in
+                // Al seleccionar un Service, se añade un item con su precio
+                let newItem = InvoiceItem(
+                    id: nil,
+                    localUUID: UUID(),
+                    concept: selectedService.serviceName,
+                    model: "",
+                    bastidor: "",
+                    date: "",
+                    amount: selectedService.servicePrice
+                )
+                items.append(newItem)
+                showServicesPopOver = false
+            }
+            .environmentObject(dbManager)
+        }
+        .onAppear {
+            setupView()
+            loadColumnLabels()
+        }
+        .onChange(of: items) { _ in recalcTotals() }
+        .onChange(of: ivaPercentage) { _ in recalcTotals() }
+        .onChange(of: irpfPercentage) { _ in recalcTotals() }
+    }
+    
+    // Eliminar fila
+    private func removeItem(_ target: InvoiceItem) {
+        if let idx = items.firstIndex(where: { $0.localUUID == target.localUUID }) {
+            items.remove(at: idx)
+            recalcTotals()
+        }
+    }
+    
+    // Cargar la factura si es edición
+    private func setupView() {
+        if let existing = invoiceToEdit {
+            // Si estamos editando, rellenamos con lo que ya tenía
+            invoiceNumber   = existing.invoiceNumber
+            invoiceDate     = existing.invoiceDate
+            issuerName      = existing.issuerName
+            issuerAddress   = existing.issuerAddress
+            issuerNIF       = existing.issuerNIF
+            clientName      = existing.clientName
+            clientAddress   = existing.clientAddress
+            clientNIF       = existing.clientNIF
+            observaciones   = existing.observaciones
+            ivaPercentage   = existing.ivaPercentage
+            irpfPercentage  = existing.irpfPercentage
+            items           = existing.items
+            baseImponible   = existing.baseImponible
+            totalIVA        = existing.totalIVA
+            totalIRPF       = existing.totalIRPF
+            totalFactura    = existing.totalFactura
+            
+            selectedIssuerId = existing.issuerId
+        } else {
+            // Si es una factura nueva:
+            invoiceNumber = dbManager.getNextInvoiceNumber()
+            let df = DateFormatter()
+            df.dateFormat = "dd/MM/yyyy"
+            invoiceDate = df.string(from: Date())
+            
+            // CAMBIADO: Quitamos los valores por defecto para Emisor
+            issuerName    = ""  // ← Dejamos vacío en vez de "ETM INSTANT WORK S.L"
+            issuerAddress = ""  // ← Dejamos vacío en vez de la dirección
+            issuerNIF     = ""
+            
+            // Mantenemos IVA e IRPF al 21% y 0% (si lo deseas):
+            ivaPercentage = 21.0
+            irpfPercentage = 0.0
+        }
+    }
+    
+    // Leer las etiquetas personalizadas de la DB
+    private func loadColumnLabels() {
+        labelConcept  = dbManager.getSettingValue(forKey: "column_concept_label")
+        labelModel    = dbManager.getSettingValue(forKey: "column_model_label")
+        labelBastidor = dbManager.getSettingValue(forKey: "column_bastidor_label")
+        labelDate     = dbManager.getSettingValue(forKey: "column_date_label")
+        labelAmount   = dbManager.getSettingValue(forKey: "column_amount_label")
+
+        print("DEBUG CreateInvoiceView.loadColumnLabels() -> [\(labelConcept), \(labelModel), \(labelBastidor), \(labelDate), \(labelAmount)]")
+        
+        // fallbacks
+        if labelConcept.isEmpty  { labelConcept  = "Concepto"  }
+        if labelModel.isEmpty    { labelModel    = "Modelo"    }
+        if labelBastidor.isEmpty { labelBastidor = "Bastidor"  }
+        if labelDate.isEmpty     { labelDate     = "Fecha"     }
+        if labelAmount.isEmpty   { labelAmount   = "Importe"   }
+    }
+    
+    // Recalcular totales
+    private func recalcTotals() {
+        let base = items.reduce(0.0) { $0 + $1.amount }
+        baseImponible = base
+        
+        let iva = base * (ivaPercentage / 100.0)
+        totalIVA = iva
+        
+        let irpf = base * (irpfPercentage / 100.0)
+        totalIRPF = irpf
+        
+        totalFactura = base + iva - irpf
+    }
+    
+    // Guardar la factura
+    private func saveInvoice() {
+        recalcTotals()
+        let invoice = Invoice(
+            id: invoiceToEdit?.id,
+            issuerId: selectedIssuerId,
+            invoiceNumber: invoiceNumber,
+            invoiceDate: invoiceDate,
+            issuerName: issuerName,
+            issuerAddress: issuerAddress,
+            issuerNIF: issuerNIF,
+            clientName: clientName,
+            clientAddress: clientAddress,
+            clientNIF: clientNIF,
+            observaciones: observaciones,
+            items: items,
+            ivaPercentage: ivaPercentage,
+            irpfPercentage: irpfPercentage,
+            baseImponible: baseImponible,
+            totalIVA: totalIVA,
+            totalIRPF: totalIRPF,
+            totalFactura: totalFactura
+        )
+        if invoiceToEdit == nil {
+            dbManager.insertInvoice(invoice)
+        } else {
+            dbManager.updateInvoice(invoice)
+        }
+        dismiss()
+    }
+}
+
+// Popover de servicios
+struct ServicesPopoverView: View {
+    @EnvironmentObject var dbManager: DatabaseManager
+    let onSelect: (Service) -> Void
+    
+    var body: some View {
+        List {
+            ForEach(dbManager.fetchAllServices()) { svc in
+                Button {
+                    onSelect(svc)
+                } label: {
+                    Text("\(svc.serviceName) - \(svc.servicePrice, specifier: "%.2f")€")
+                }
+            }
+        }
+        .frame(width: 250, height: 300)
+    }
+}
+
+-----
+
+codigo 12: (./MyInvoiceApp/Views/ClientsView.swift)
+import SwiftUI
+
+struct ClientsView: View {
+    
+    @EnvironmentObject var dbManager: DatabaseManager
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var newName: String = ""
+    @State private var newAddress: String = ""
+    @State private var newNif: String = ""
+    @State private var newNick: String = "" // ← Nuevo
+    
+    // Para editar
+    @State private var editClient: Client? = nil
+    @State private var editName: String = ""
+    @State private var editAddress: String = ""
+    @State private var editNif: String = ""
+    @State private var editNick: String = "" // ← Nuevo
+    
+    @State private var showEditSheet = false
+    
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text("Gestión de Clientes")
+                .font(.title)
+                .padding(.bottom, 8)
+            
+            HStack {
+                // Formulario rápido para añadir un nuevo cliente
+                VStack(alignment: .leading) {
+                    TextField("Nombre / Razón Social", text: $newName)
+                    TextField("Dirección", text: $newAddress)
+                    TextField("NIF/CIF", text: $newNif)
+                    
+                    // Campo Nick
+                    TextField("Nick (opcional)", text: $newNick)
+                    
+                    Button("Añadir Cliente") {
+                        addClient()
+                    }
+                    .disabled(newName.isEmpty || newAddress.isEmpty)
+                }
+                .frame(maxWidth: 300)
+                
+                Divider()
+                
+                // Lista de clientes existentes
+                List {
+                    ForEach(dbManager.clients) { client in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(client.name)
+                                    .font(.headline)
+                                Text(client.address)
+                                    .font(.subheadline)
+                                Text("NIF: \(client.nif)")
+                                    .font(.footnote)
+                                
+                                if !client.nick.isEmpty {
+                                    Text("Nick: \(client.nick)")
+                                        .font(.footnote)
+                                        .foregroundColor(.blue)
+                                }
+                            }
+                            Spacer()
+                            Button("Editar") {
+                                editClient = client
+                                editName = client.name
+                                editAddress = client.address
+                                editNif = client.nif
+                                editNick = client.nick
+                                showEditSheet = true
+                            }
+                            .buttonStyle(BorderlessButtonStyle())
+                            Button("Borrar", role: .destructive) {
+                                dbManager.deleteClient(client)
+                            }
+                            .buttonStyle(BorderlessButtonStyle())
+                        }
+                    }
+                }
+                .frame(minWidth: 400, minHeight: 400)
+            }
+            
+            HStack {
+                Spacer()
+                Button("Cerrar") {
+                    dismiss()
+                }
+                .padding()
+            }
+        }
+        .padding()
+        .frame(minWidth: 900, minHeight: 500) // Ajuste de tamaño
+        .sheet(isPresented: $showEditSheet) {
+            editView
+        }
+    }
+    
+    private func addClient() {
+        let client = Client(
+            name: newName,
+            address: newAddress,
+            nif: newNif,
+            nick: newNick  // ← guardamos
+        )
+        dbManager.insertClient(client)
+        newName = ""
+        newAddress = ""
+        newNif = ""
+        newNick = ""   // limpiamos
+    }
+    
+    @ViewBuilder
+    private var editView: some View {
+        if let editing = editClient {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Editar Cliente").font(.title2).padding(.bottom, 5)
+                
+                TextField("Nombre / Razón Social", text: $editName)
+                TextField("Dirección", text: $editAddress)
+                TextField("NIF/CIF", text: $editNif)
+                TextField("Nick (opcional)", text: $editNick)
+                
+                HStack {
+                    Spacer()
+                    Button("Guardar cambios") {
+                        let updated = Client(
+                            id: editing.id,
+                            name: editName,
+                            address: editAddress,
+                            nif: editNif,
+                            nick: editNick
+                        )
+                        dbManager.updateClient(updated)
+                        showEditSheet = false
+                    }
+                    .padding(.trailing, 10)
+                    
+                    Button("Cancelar") {
+                        showEditSheet = false
+                    }
+                }
+                .padding(.top, 10)
+            }
+            .padding()
+            .frame(minWidth: 400, minHeight: 200)
+        }
+    }
+}
+
+-----
+
+codigo 13: (./MyInvoiceApp/Views/ServicesView.swift)
+import SwiftUI
+
+struct ServicesView: View {
+    @EnvironmentObject var dbManager: DatabaseManager
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var newName: String = ""
+    @State private var newDesc: String = ""
+    @State private var newPrice: Double = 0.0
+    
+    @State private var services: [Service] = []
+    
+    // Para edición
+    @State private var editService: Service? = nil
+    @State private var editName: String = ""
+    @State private var editDesc: String = ""
+    @State private var editPrice: Double = 0.0
+    
+    @State private var showEditSheet = false
+    
+    var body: some View {
+        VStack {
+            Text("Servicios / Productos")
+                .font(.largeTitle)
+            
+            HStack(alignment: .top) {
+                // FORM para añadir
+                VStack(alignment: .leading) {
+                    TextField("Nombre del Servicio", text: $newName)
+                    TextField("Descripción", text: $newDesc)
+                    TextField("Precio", value: $newPrice, formatter: NumberFormatter())
+                    
+                    Button("Añadir Servicio") {
+                        let s = Service(
+                            serviceName: newName,
+                            serviceDescription: newDesc,
+                            servicePrice: newPrice
+                        )
+                        dbManager.insertService(s)
+                        loadServices()
+                        clearNewFields()
+                    }
+                    .disabled(newName.isEmpty)
+                }
+                .frame(width: 250)
+                
+                Divider()
+                
+                // LISTA
+                List {
+                    ForEach(services) { svc in
+                        VStack(alignment: .leading) {
+                            Text(svc.serviceName).font(.headline)
+                            Text(svc.serviceDescription).font(.subheadline)
+                            Text(String(format: "%.2f €", svc.servicePrice))
+                                .font(.footnote)
+                        }
+                        .contextMenu {
+                            Button("Editar") {
+                                editService = svc
+                                editName  = svc.serviceName
+                                editDesc  = svc.serviceDescription
+                                editPrice = svc.servicePrice
+                                showEditSheet = true
+                            }
+                            Button("Borrar", role: .destructive) {
+                                dbManager.deleteService(svc)
+                                loadServices()
+                            }
+                        }
+                    }
+                }
+                .frame(minWidth: 400, minHeight: 400)
+            }
+            
+            HStack {
+                Spacer()
+                Button("Cerrar") {
+                    dismiss()
+                }.padding(.top)
+            }
+        }
+        .padding()
+        .onAppear {
+            loadServices()
+        }
+        .sheet(isPresented: $showEditSheet) {
+            editView
+        }
+    }
+    
+    private func loadServices() {
+        services = dbManager.fetchAllServices()
+    }
+    
+    private func clearNewFields() {
+        newName = ""
+        newDesc = ""
+        newPrice = 0.0
+    }
+    
+    @ViewBuilder
+    private var editView: some View {
+        if let svc = editService {
+            VStack {
+                Text("Editar Servicio").font(.headline)
+                TextField("Nombre", text: $editName)
+                TextField("Descripción", text: $editDesc)
+                TextField("Precio", value: $editPrice, formatter: NumberFormatter())
+                
+                HStack {
+                    Spacer()
+                    Button("Guardar") {
+                        let updated = Service(
+                            id: svc.id,
+                            serviceName: editName,
+                            serviceDescription: editDesc,
+                            servicePrice: editPrice
+                        )
+                        dbManager.updateService(updated)
+                        loadServices()
+                        showEditSheet = false
+                    }
+                    Button("Cancelar") {
+                        showEditSheet = false
+                    }
+                }.padding(.top)
+            }
+            .padding()
+            .frame(width: 300)
+        }
+    }
+}
+
+-----
+
+codigo 14: (./MyInvoiceApp/Views/ItemColumnsSettingsView.swift)
+import SwiftUI
+
+struct ItemColumnsSettingsView: View {
+    @EnvironmentObject var dbManager: DatabaseManager
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var labelConcept:  String = ""
+    @State private var labelModel:    String = ""
+    @State private var labelBastidor: String = ""
+    @State private var labelDate:     String = ""
+    @State private var labelAmount:   String = ""
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("Personalizar Columnas").font(.title2)
+            
+            TextField("Etiqueta para 'Concepto'", text: $labelConcept)
+            TextField("Etiqueta para 'Modelo'", text: $labelModel)
+            TextField("Etiqueta para 'Bastidor'", text: $labelBastidor)
+            TextField("Etiqueta para 'Fecha'", text: $labelDate)
+            TextField("Etiqueta para 'Importe'", text: $labelAmount)
+            
+            HStack {
+                Spacer()
+                Button("Guardar") {
+                    print("DEBUG: Guardando => [\(labelConcept), \(labelModel), \(labelBastidor), \(labelDate), \(labelAmount)]")
+                    
+                    dbManager.setSettingValue(labelConcept,  forKey: "column_concept_label")
+                    dbManager.setSettingValue(labelModel,    forKey: "column_model_label")
+                    dbManager.setSettingValue(labelBastidor, forKey: "column_bastidor_label")
+                    dbManager.setSettingValue(labelDate,     forKey: "column_date_label")
+                    dbManager.setSettingValue(labelAmount,   forKey: "column_amount_label")
+                    
+                    dismiss()
+                }
+                Button("Cancelar") {
+                    dismiss()
+                }
+            }
+        }
+        .padding()
+        .onAppear {
+            // Cargar valor actual
+            labelConcept  = dbManager.getSettingValue(forKey: "column_concept_label")
+            labelModel    = dbManager.getSettingValue(forKey: "column_model_label")
+            labelBastidor = dbManager.getSettingValue(forKey: "column_bastidor_label")
+            labelDate     = dbManager.getSettingValue(forKey: "column_date_label")
+            labelAmount   = dbManager.getSettingValue(forKey: "column_amount_label")
+            
+            print("DEBUG onAppear -> [\(labelConcept), \(labelModel), \(labelBastidor), \(labelDate), \(labelAmount)]")
+        }
+    }
+}
+
+-----
+
+codigo 15: (./MyInvoiceApp/Views/IssuersView.swift)
+import SwiftUI
+
+struct IssuersView: View {
+    @EnvironmentObject var dbManager: DatabaseManager
+    @Environment(\.dismiss) var dismiss
+    
+    // Campos para crear un nuevo emisor
+    @State private var newName: String = ""
+    @State private var newAddress: String = ""
+    @State private var newNif: String = ""
+    @State private var newPhone: String = ""
+    
+    // Para edición
+    @State private var editIssuer: Issuer? = nil
+    @State private var editName: String = ""
+    @State private var editAddress: String = ""
+    @State private var editNif: String = ""
+    @State private var editPhone: String = ""
+    @State private var showEditSheet = false
+    
+    // Listado local
+    @State private var issuers: [Issuer] = []
+    
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text("Gestión de Emisores")
+                .font(.title)
+                .padding(.bottom, 8)
+            
+            HStack(alignment: .top) {
+                // Formulario para añadir un emisor
+                VStack(alignment: .leading, spacing: 4) {
+                    TextField("Nombre/Razón Social", text: $newName)
+                    TextField("Dirección", text: $newAddress)
+                    TextField("NIF/CIF", text: $newNif)
+                    TextField("Teléfono", text: $newPhone)
+                    
+                    Button("Añadir Emisor") {
+                        addIssuer()
+                    }
+                    .disabled(newName.isEmpty || newAddress.isEmpty)
+                }
+                .frame(width: 300)
+                
+                Divider()
+                
+                // Lista de emisores
+                List {
+                    ForEach(issuers) { issuer in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(issuer.name).font(.headline)
+                            Text(issuer.address).font(.subheadline)
+                            Text("NIF: \(issuer.nif)").font(.footnote)
+                            if !issuer.phone.isEmpty {
+                                Text("Tel: \(issuer.phone)")
+                                    .font(.footnote)
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                        .contextMenu {
+                            Button("Editar") {
+                                editIssuer = issuer
+                                editName = issuer.name
+                                editAddress = issuer.address
+                                editNif = issuer.nif
+                                editPhone = issuer.phone
+                                showEditSheet = true
+                            }
+                            Button("Borrar", role: .destructive) {
+                                dbManager.deleteIssuer(issuer)
+                                loadIssuers()
+                            }
+                        }
+                    }
+                }
+                .frame(minWidth: 400, minHeight: 400)
+            }
+            
+            HStack {
+                Spacer()
+                Button("Cerrar") {
+                    dismiss()
+                }
+                .padding()
+            }
+        }
+        .padding()
+        .frame(minWidth: 900, minHeight: 500)
+        .onAppear {
+            loadIssuers()
+        }
+        .sheet(isPresented: $showEditSheet) {
+            editView
+        }
+    }
+    
+    private func addIssuer() {
+        dbManager.insertIssuer(name: newName,
+                               address: newAddress,
+                               nif: newNif,
+                               phone: newPhone)
+        loadIssuers()
+        newName = ""
+        newAddress = ""
+        newNif = ""
+        newPhone = ""
+    }
+    
+    private func loadIssuers() {
+        issuers = dbManager.fetchAllIssuers()
+    }
+    
+    @ViewBuilder
+    private var editView: some View {
+        if let issuer = editIssuer {
+            VStack(alignment: .leading) {
+                Text("Editar Emisor").font(.title2)
+                
+                TextField("Nombre/Razón Social", text: $editName)
+                TextField("Dirección", text: $editAddress)
+                TextField("NIF/CIF", text: $editNif)
+                TextField("Teléfono", text: $editPhone)
+                
+                HStack {
+                    Spacer()
+                    Button("Guardar") {
+                        let updated = Issuer(
+                            id: issuer.id,
+                            name: editName,
+                            address: editAddress,
+                            nif: editNif,
+                            phone: editPhone
+                        )
+                        dbManager.updateIssuer(updated)
+                        showEditSheet = false
+                        loadIssuers()
+                    }
+                    Button("Cancelar") {
+                        showEditSheet = false
+                    }
+                }
+                .padding(.top, 8)
+            }
+            .padding()
+            .frame(width: 350)
+        }
+    }
+}
+
+-----
+
+codigo 16: (./MyInvoiceApp/Views/ExpensesReportView.swift)
+import SwiftUI
+import Charts
+
+struct ExpensesReportView: View {
+    @EnvironmentObject var dbManager: DatabaseManager
+    @Environment(\.dismiss) var dismiss
+    
+    // Fechas de filtro
+    @State private var startDate: Date = Calendar.current.date(byAdding: .month, value: -2, to: Date()) ?? Date()
+    @State private var endDate: Date = Date()
+    
+    // Datos
+    @State private var filteredExpenses: [Expense] = []
+    @State private var totalExpenses: Double = 0.0
+    
+    // Para el chart
+    private struct MonthlyExpense: Identifiable {
+        let id = UUID()
+        let month: String
+        let total: Double
+    }
+    @State private var monthlyData: [MonthlyExpense] = []
+    
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text("Informe de Gastos Mensuales")
+                .font(.title)
+                .padding(.bottom, 6)
+            
+            HStack {
+                Text("Desde:")
+                DatePicker("", selection: $startDate, displayedComponents: .date)
+                    .labelsHidden()
+                Text("Hasta:")
+                DatePicker("", selection: $endDate, displayedComponents: .date)
+                    .labelsHidden()
+                
+                Button("Generar Informe") {
+                    generateReport()
+                }
+            }
+            
+            Divider()
+            
+            Text(String(format: "Total Gastos en el período: %.2f €", totalExpenses))
+                .font(.headline)
+                .padding(.vertical, 4)
+            
+            if !filteredExpenses.isEmpty {
+                List(filteredExpenses) { exp in
+                    VStack(alignment: .leading) {
+                        Text(exp.concept).font(.headline)
+                        Text("Fecha: \(exp.expenseDate)")
+                        Text(String(format: "Importe: %.2f €", exp.amount))
+                            .fontWeight(.bold)
+                    }
+                }
+                .frame(minHeight: 200)
+            } else {
+                Text("No hay gastos en este rango.")
+                    .foregroundColor(.secondary)
+            }
+            
+            // Gráfica
+            if !monthlyData.isEmpty {
+                Text("Gastos por Mes").font(.headline).padding(.top, 8)
+                ScrollView(.horizontal) {
+                    Chart(monthlyData) { data in
+                        BarMark(
+                            x: .value("Mes", data.month),
+                            y: .value("Total Gastos", data.total)
+                        )
+                    }
+                    .frame(height: 250)
+                }
+            } else {
+                Text("No hay datos para la gráfica.").foregroundColor(.secondary)
+            }
+            
+            HStack {
+                Spacer()
+                Button("Cerrar") {
+                    dismiss()
+                }
+            }
+            .padding(.top, 8)
+        }
+        .padding()
+        .frame(minWidth: 800, minHeight: 600)
+        .onAppear {
+            generateReport()
+        }
+    }
+    
+    private func generateReport() {
+        let df = DateFormatter()
+        df.dateFormat = "dd/MM/yyyy"
+        
+        // Filtrar
+        let all = dbManager.fetchAllExpenses()
+        let filtered = all.filter { exp in
+            if let d = df.date(from: exp.expenseDate) {
+                return d >= startDate && d <= endDate
+            }
+            return false
+        }
+        self.filteredExpenses = filtered
+        
+        // Total
+        totalExpenses = filtered.reduce(0) { $0 + $1.amount }
+        
+        // Agrupar por mes
+        var monthlyTotals: [String: Double] = [:]
+        let monthFormatter = DateFormatter()
+        monthFormatter.dateFormat = "yyyy-MM"
+        
+        for exp in filtered {
+            if let d = df.date(from: exp.expenseDate) {
+                let key = monthFormatter.string(from: d)
+                monthlyTotals[key, default: 0] += exp.amount
+            }
+        }
+        
+        // Generar array sorted
+        // Extraer todos los meses en el rango
+        var current = startDate.startOfMonth()!
+        let endOfMonth = endDate.startOfMonth()!
+        
+        var data: [MonthlyExpense] = []
+        let calendar = Calendar.current
+        
+        while current <= endOfMonth {
+            let key = monthFormatter.string(from: current)
+            let val = monthlyTotals[key] ?? 0
+            data.append(MonthlyExpense(month: key, total: val))
+            
+            if let next = calendar.date(byAdding: .month, value: 1, to: current) {
+                current = next
+            } else {
+                break
+            }
+        }
+        
+        monthlyData = data
+    }
+}
+
+// Helper
+extension Date {
+    func startOfMonth() -> Date? {
+        let cal = Calendar.current
+        let comps = cal.dateComponents([.year, .month], from: self)
+        return cal.date(from: comps)
+    }
+}
+
+-----
+
+codigo 17: (./MyInvoiceApp/Views/LogoSettingsView.swift)
+import SwiftUI
+
+struct LogoSettingsView: View {
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var dbManager: DatabaseManager
+    
+    // Para previsualizar la ruta actual
+    @State private var currentLogoPath: String = ""
+    // Para mostrar la imagen en la vista
+    @State private var previewImage: NSImage? = nil
+    
+    var body: some View {
+        VStack(spacing: 15) {
+            Text("Configurar Logo").font(.title2)
+            
+            if let img = previewImage {
+                // Muestra la imagen a modo de preview
+                Image(nsImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 200, height: 100)
+            } else {
+                Text("No hay logo seleccionado")
+                    .foregroundColor(.secondary)
+            }
+            
+            Button("Elegir Logo…") {
+                pickLogoFile()
+            }
+            .padding(.top, 10)
+            
+            // AÑADIDO: Indicamos el tamaño recomendado
+            Text("Tamaño recomendado: 1600 × 562 px")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+                .padding(.bottom, 8)
+            
+            // Botón para limpiar y volver a la imagen por defecto
+            Button("Restaurar Logo por defecto") {
+                dbManager.setSettingValue("", forKey: "custom_logo_path")
+                loadCurrentLogo()
+            }
+            .foregroundColor(.red)
+            .padding(.top, 10)
+            
+            Spacer()
+            Button("Cerrar") {
+                dismiss()
+            }
+        }
+        .padding()
+        .frame(width: 600, height: 400)
+        .onAppear {
+            loadCurrentLogo()
+        }
+    }
+    
+    private func loadCurrentLogo() {
+        // Leer la ruta guardada en app_settings
+        let storedPath = dbManager.getSettingValue(forKey: "custom_logo_path")
+        currentLogoPath = storedPath
+        
+        if !storedPath.isEmpty {
+            // Cargar la imagen
+            let url = URL(fileURLWithPath: storedPath)
+            if let nsimg = NSImage(contentsOf: url) {
+                previewImage = nsimg
+            } else {
+                previewImage = nil
+            }
+        } else {
+            // Sin ruta => sin preview (o la default)
+            previewImage = nil
+        }
+    }
+    
+    private func pickLogoFile() {
+        let panel = NSOpenPanel()
+        panel.allowedFileTypes = ["png", "jpg", "jpeg"]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.title = "Seleccionar imagen para el logo"
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            // Copiamos la imagen a ApplicationSupport para conservarla
+            do {
+                let fm = FileManager.default
+                let appSupport = try fm.url(
+                    for: .applicationSupportDirectory,
+                    in: .userDomainMask,
+                    appropriateFor: nil,
+                    create: true
+                )
+                let destURL = appSupport.appendingPathComponent(url.lastPathComponent)
+                
+                // Si ya existe, lo borramos
+                if fm.fileExists(atPath: destURL.path) {
+                    try fm.removeItem(at: destURL)
+                }
+                
+                // Copiamos
+                try fm.copyItem(at: url, to: destURL)
+                
+                // Guardamos la nueva ruta interna
+                dbManager.setSettingValue(destURL.path, forKey: "custom_logo_path")
+                
+                // Recargamos preview
+                loadCurrentLogo()
+                
+            } catch {
+                print("ERROR al copiar el logo seleccionado: \(error)")
+            }
+        }
+    }
+}
+
+-----
+
+codigo 18: (./MyInvoiceApp/Views/ExpensesView.swift)
+import SwiftUI
+import Charts
+
+struct ExpensesView: View {
+    @EnvironmentObject var dbManager: DatabaseManager
+    @Environment(\.dismiss) var dismiss
+    
+    // Campos para añadir un nuevo gasto
+    @State private var concept: String = ""
+    @State private var dateStr: String = ""
+    @State private var amount: Double = 0.0
+    
+    // Lista completa de gastos (todos)
+    @State private var expenses: [Expense] = []
+    
+    // Para edición
+    @State private var editExpense: Expense? = nil
+    @State private var editConcept: String = ""
+    @State private var editDate: String = ""
+    @State private var editAmount: Double = 0.0
+    @State private var showEditSheet = false
+    
+    // ----------------------------
+    // Filtro de fechas + Gráfica
+    // ----------------------------
+    @State private var startDate: Date = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
+    @State private var endDate: Date = Date()
+    
+    // Gastos filtrados según el rango
+    @State private var filteredExpenses: [Expense] = []
+    
+    // Total de gastos en el rango
+    @State private var totalFilteredExpenses: Double = 0.0
+    
+    // Datos mensuales para la gráfica
+    private struct MonthlyExpense: Identifiable {
+        let id = UUID()
+        let month: String  // ejemplo: "2025-03"
+        let total: Double
+    }
+    @State private var monthlyData: [MonthlyExpense] = []
+    
+    // Alerta de confirmación tras guardar
+    @State private var showSuccessAlert = false
+    
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text("Gastos Mensuales")
+                .font(.largeTitle)
+                .padding(.bottom, 8)
+            
+            // ---------------------------------------------
+            // Formulario rápido para añadir un nuevo gasto
+            // ---------------------------------------------
+            HStack(alignment: .top) {
+                VStack(alignment: .leading) {
+                    TextField("Concepto", text: $concept)
+                    TextField("Fecha (dd/MM/yyyy)", text: $dateStr)
+                    TextField("Cantidad", value: $amount, formatter: NumberFormatter())
+                    
+                    Button("Añadir Gasto") {
+                        dbManager.insertExpense(
+                            concept: concept,
+                            expenseDate: dateStr,
+                            amount: amount
+                        )
+                        loadExpenses()
+                        generateReport()
+                        clearFields()
+                        
+                        // Mostrar alerta de confirmación
+                        showSuccessAlert = true
+                    }
+                    .disabled(concept.isEmpty)
+                }
+                .frame(width: 250)
+                
+                Divider()
+                
+                // -------------------------
+                // Lista de gastos filtrados
+                // -------------------------
+                List {
+                    ForEach(filteredExpenses) { exp in
+                        VStack(alignment: .leading) {
+                            Text(exp.concept)
+                                .font(.headline)
+                            Text("Fecha: \(exp.expenseDate)")
+                            Text(String(format: "Importe: %.2f €", exp.amount))
+                                .font(.footnote)
+                        }
+                        .contextMenu {
+                            Button("Editar") {
+                                editExpense = exp
+                                editConcept = exp.concept
+                                editDate    = exp.expenseDate
+                                editAmount  = exp.amount
+                                showEditSheet = true
+                            }
+                            Button("Borrar", role: .destructive) {
+                                dbManager.deleteExpense(exp)
+                                loadExpenses()
+                                generateReport()
+                            }
+                        }
+                    }
+                }
+                .frame(minWidth: 400, minHeight: 300)
+            }
+            
+            Divider()
+                .padding(.vertical, 8)
+            
+            // -------------------------------------
+            // BLOQUE de FILTRO de FECHAS + INFORME
+            // -------------------------------------
+            HStack {
+                Text("Filtrar Desde:")
+                DatePicker("", selection: $startDate, displayedComponents: .date)
+                    .labelsHidden()
+                
+                Text("Hasta:")
+                DatePicker("", selection: $endDate, displayedComponents: .date)
+                    .labelsHidden()
+                
+                Button("Generar Informe") {
+                    generateReport()
+                }
+            }
+            
+            Text(String(format: "Total Gastos en el período: %.2f €", totalFilteredExpenses))
+                .font(.headline)
+                .padding(.vertical, 4)
+            
+            // -----------------------------------------------
+            // Gráficos: “Quesito” + Barras
+            // -----------------------------------------------
+            if !monthlyData.isEmpty {
+                Text("Gastos por Mes")
+                    .font(.headline)
+                    .padding(.top, 6)
+                
+                HStack(alignment: .top, spacing: 30) {
+                    
+                    // --------- GRÁFICO DE SECTORES (“QUESITO”) ---------
+                    Chart(monthlyData) { data in
+                        SectorMark(
+                            angle: .value("Total Gastos", data.total),
+                            innerRadius: .ratio(0.6),    // para estilo donut
+                            outerRadius: .ratio(0.95)
+                        )
+                        .foregroundStyle(by: .value("Mes", data.month))
+                        // Etiqueta sobre el sector (opcional)
+                        .annotation(position: .overlay) {
+                            Text(String(format: "%.0f", data.total))
+                                .font(.caption2)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .frame(width: 300, height: 300)
+                    .chartLegend(.visible)
+                    
+                    // --------- GRÁFICO DE BARRAS (EXISTENTE) ---------
+                    ScrollView(.horizontal) {
+                        Chart(monthlyData) { data in
+                            BarMark(
+                                x: .value("Mes", data.month),
+                                y: .value("Total Gastos", data.total)
+                            )
+                        }
+                        .frame(height: 300)
+                        .padding()
+                    }
+                }
+            } else {
+                Text("No hay datos para la gráfica en este rango.")
+                    .foregroundColor(.secondary)
+                    .padding(.top, 4)
+            }
+            
+            // Botón Cerrar
+            HStack {
+                Spacer()
+                Button("Cerrar") {
+                    dismiss()
+                }
+            }
+            .padding(.top)
+        }
+        .padding()
+        .frame(minWidth: 900, minHeight: 600) // Tamaño mínimo similar a InformesView
+        .onAppear {
+            loadExpenses()
+            generateReport()
+        }
+        .sheet(isPresented: $showEditSheet) {
+            editView
+        }
+        // Alerta de confirmación tras guardar un nuevo gasto
+        .alert(isPresented: $showSuccessAlert) {
+            Alert(
+                title: Text("Gasto Agregado"),
+                message: Text("Se ha guardado correctamente."),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+    }
+    
+    // ---------------------------------------------------
+    // Cargar todos los gastos y resetear campos del form
+    // ---------------------------------------------------
+    private func loadExpenses() {
+        expenses = dbManager.fetchAllExpenses()
+    }
+    
+    private func clearFields() {
+        concept = ""
+        dateStr = ""
+        amount = 0.0
+    }
+    
+    // -----------------------------
+    // Vista para editar un gasto
+    // -----------------------------
+    @ViewBuilder
+    private var editView: some View {
+        if let exp = editExpense {
+            VStack(alignment: .leading) {
+                Text("Editar Gasto")
+                    .font(.headline)
+                
+                TextField("Concepto", text: $editConcept)
+                TextField("Fecha (dd/MM/yyyy)", text: $editDate)
+                TextField("Cantidad", value: $editAmount, formatter: NumberFormatter())
+                
+                HStack {
+                    Spacer()
+                    Button("Guardar") {
+                        let updated = Expense(
+                            id: exp.id,
+                            concept: editConcept,
+                            expenseDate: editDate,
+                            amount: editAmount
+                        )
+                        dbManager.updateExpense(updated)
+                        loadExpenses()
+                        generateReport()
+                        showEditSheet = false
+                    }
+                    Button("Cancelar") {
+                        showEditSheet = false
+                    }
+                }
+                .padding(.top)
+            }
+            .padding()
+            .frame(width: 300)
+        }
+    }
+    
+    // ------------------------------------------------
+    // Filtrar, calcular total y preparar datos Chart
+    // ------------------------------------------------
+    private func generateReport() {
+        // 1. Filtrar gastos según las fechas
+        let df = DateFormatter()
+        df.dateFormat = "dd/MM/yyyy"
+        
+        let filtered = expenses.filter { exp in
+            if let d = df.date(from: exp.expenseDate) {
+                return (d >= startDate && d <= endDate)
+            }
+            return false
+        }
+        self.filteredExpenses = filtered
+        
+        // 2. Calcular total
+        totalFilteredExpenses = filtered.reduce(0) { $0 + $1.amount }
+        
+        // 3. Agrupar por mes (yyyy-MM) y sumar
+        let monthFormatter = DateFormatter()
+        monthFormatter.dateFormat = "yyyy-MM"
+        
+        var monthlyTotals: [String: Double] = [:]
+        for exp in filtered {
+            if let d = df.date(from: exp.expenseDate) {
+                let key = monthFormatter.string(from: d)
+                monthlyTotals[key, default: 0] += exp.amount
+            }
+        }
+        
+        // 4. Crear array ordenado de datos mensuales
+        var current = startDate.startOfMonthForExpenses()!
+        let lastMonth = endDate.startOfMonthForExpenses()!
+        let cal = Calendar.current
+        
+        var tempData: [MonthlyExpense] = []
+        while current <= lastMonth {
+            let key = monthFormatter.string(from: current)
+            let total = monthlyTotals[key] ?? 0.0
+            tempData.append(MonthlyExpense(month: key, total: total))
+            
+            if let next = cal.date(byAdding: .month, value: 1, to: current) {
+                current = next
+            } else {
+                break
+            }
+        }
+        self.monthlyData = tempData
+    }
+}
+
+// Helper para coger inicio de mes sin chocar con la otra extension:
+extension Date {
+    func startOfMonthForExpenses() -> Date? {
+        let cal = Calendar.current
+        let comps = cal.dateComponents([.year, .month], from: self)
+        return cal.date(from: comps)
+    }
+}
+
+-----
+
+codigo 19: (./MyInvoiceApp/Views/PrintPreviewView.swift)
+import SwiftUI
+import AppKit
+
+// ScaledView (igual que siempre)
+struct ScaledView<Content: View>: View {
+    let scale: CGFloat
+    let content: Content
+
+    init(scale: CGFloat, @ViewBuilder _ builder: () -> Content) {
+        self.scale = scale
+        self.content = builder()
+    }
+
+    var body: some View {
+        content
+            .scaleEffect(scale, anchor: .topLeading)
+    }
+}
+
+// MultiPageNSView con extraTopMargin
+class MultiPageNSView<RootView: View>: NSView {
+    let hostingView: NSHostingView<RootView>
+
+    private let extraTopMargin: CGFloat = 80
+
+    init(rootView: RootView) {
+        self.hostingView = NSHostingView(rootView: rootView)
+        super.init(frame: .zero)
+        addSubview(hostingView)
+    }
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) not implemented")
+    }
+
+    override var isFlipped: Bool { true }
+
+    override func layout() {
+        super.layout()
+        hostingView.frame = bounds
+    }
+
+    private func printableRect(for printInfo: NSPrintInfo) -> NSRect {
+        // Toma todo el papel (márgenes = 0, etc.)
+        let paper = printInfo.paperSize
+        return NSRect(x: 0, y: 0, width: paper.width, height: paper.height)
+    }
+
+    override func knowsPageRange(_ range: NSRangePointer) -> Bool {
+        guard let printOp = NSPrintOperation.current else { return false }
+
+        hostingView.layoutSubtreeIfNeeded()
+
+        let usableRect = printableRect(for: printOp.printInfo)
+        let contentH = hostingView.fittingSize.height
+
+        let totalHeight = contentH + extraTopMargin
+        self.frame.size = CGSize(width: usableRect.width, height: totalHeight)
+
+        // Desplazamos el hostingView
+        hostingView.frame = CGRect(x: 0, y: extraTopMargin,
+                                   width: usableRect.width,
+                                   height: contentH)
+
+        let pageCount = Int(ceil(totalHeight / usableRect.height))
+        range.pointee = NSMakeRange(1, pageCount)
+        return true
+    }
+
+    override func rectForPage(_ page: Int) -> NSRect {
+        guard let printOp = NSPrintOperation.current else { return .zero }
+        let usableRect = printableRect(for: printOp.printInfo)
+        let pageIndex  = page - 1
+        let yOffset    = CGFloat(pageIndex) * usableRect.height
+        let totalH     = self.frame.size.height
+
+        let remaining = totalH - yOffset
+        if remaining <= 0 { return .zero }
+
+        let thisPageHeight = min(usableRect.height, remaining)
+        return NSRect(x: 0, y: yOffset,
+                      width: usableRect.width,
+                      height: thisPageHeight)
+    }
+}
+
+// PrintPreviewView: usa la vista paginada (PagedInvoiceDetailView) y ahora incluye un ScrollView para previsualizar la factura completa
+struct PrintPreviewView: View {
+    let invoice: Invoice
+
+    // AÑADIDO: necesitamos el dbManager para inyectarlo en PagedInvoiceDetailView
+    @EnvironmentObject var dbManager: DatabaseManager  // AÑADIDO
+
+    let forcedScale: CGFloat = 0.85
+
+    var body: some View {
+        VStack {
+            Text("Vista previa (25 filas máx. por página)")
+                .font(.headline)
+                .padding(.bottom, 8)
+
+            // Se envuelve la vista paginada en un ScrollView para permitir el desplazamiento vertical
+            ScrollView {
+                PagedInvoiceDetailView(invoice: invoice)
+                    .environmentObject(dbManager) // AÑADIDO, por si se requiere en previsualización
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            HStack {
+                Button("Imprimir") {
+                    printDirectly()
+                }
+                Button("Exportar PDF") {
+                    exportPDFDirectly()
+                }
+                Button("Cerrar") {
+                    // Por ser .sheet, se cierra con el environment dismiss
+                    NSApp.keyWindow?.close() // o environment(\.dismiss)
+                }
+            }
+            .padding(.top, 12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func printDirectly() {
+        // AÑADIDO environmentObject para la subvista
+        let scaled = ScaledView(scale: forcedScale) {
+            PagedInvoiceDetailView(invoice: invoice)
+                .environmentObject(dbManager)
+        }
+        let multiPageView = MultiPageNSView(rootView: scaled)
+
+        let printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
+        printInfo.paperSize = NSSize(width: 595, height: 842) // A4
+        printInfo.orientation = .portrait
+
+        // Márgenes = 0 para no recortar
+        printInfo.leftMargin   = 0
+        printInfo.rightMargin  = 0
+        printInfo.topMargin    = 0
+        printInfo.bottomMargin = 0
+        printInfo.isHorizontallyCentered = false
+        printInfo.isVerticallyCentered   = false
+        printInfo.horizontalPagination   = .clip
+        printInfo.verticalPagination     = .clip
+        printInfo.scalingFactor         = 1.0
+
+        multiPageView.hostingView.layoutSubtreeIfNeeded()
+        multiPageView.hostingView.frame = multiPageView.bounds
+
+        let op = NSPrintOperation(view: multiPageView, printInfo: printInfo)
+        op.showsPrintPanel = true
+        op.showsProgressPanel = true
+        op.run()
+    }
+
+    private func exportPDFDirectly() {
+        let scaled = ScaledView(scale: forcedScale) {
+            PagedInvoiceDetailView(invoice: invoice)
+                .environmentObject(dbManager)
+        }
+        let multiPageView = MultiPageNSView(rootView: scaled)
+
+        let printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
+        printInfo.paperSize = NSSize(width: 595, height: 842)
+        printInfo.orientation = .portrait
+
+        printInfo.leftMargin   = 0
+        printInfo.rightMargin  = 0
+        printInfo.topMargin    = 0
+        printInfo.bottomMargin = 0
+        printInfo.isHorizontallyCentered = false
+        printInfo.isVerticallyCentered   = false
+        printInfo.horizontalPagination   = .clip
+        printInfo.verticalPagination     = .clip
+        printInfo.scalingFactor         = 1.0
+
+        multiPageView.hostingView.layoutSubtreeIfNeeded()
+        multiPageView.hostingView.frame = multiPageView.bounds
+
+        let op = NSPrintOperation(view: multiPageView, printInfo: printInfo)
+        op.showsPrintPanel = false
+        op.showsProgressPanel = false
+
+        let panel = NSSavePanel()
+        panel.title = "Exportar Factura a PDF"
+        panel.nameFieldStringValue = "Factura-\(invoice.invoiceNumber)"
+        panel.allowedFileTypes = ["pdf"]
+
+        if panel.runModal() == .OK, let url = panel.url {
+            op.printInfo.dictionary().setValue("NSPrintSaveJob", forKey: "NSPrintJobDisposition")
+            op.printInfo.dictionary().setValue(url, forKey: "NSPrintJobSavingURL")
+
+            let success = op.run()
+            if success {
+                print("PDF exportado en \(url.path)")
+            } else {
+                print("ERROR al exportar PDF.")
+            }
+        }
+    }
+}
+
+-----
+
+codigo 20: (./MyInvoiceApp/Views/CreateBudgetView.swift)
+import SwiftUI
+
+struct CreateBudgetView: View {
+    @EnvironmentObject var dbManager: DatabaseManager
+    @Environment(\.dismiss) var dismiss
+    
+    var budgetToEdit: Budget?
+    
+    // Campos principales
+    @State private var budgetNumber: Int = 0
+    @State private var budgetDate: String = ""
+    @State private var issuerId: Int? = nil
+    @State private var clientId: Int? = nil
+    @State private var observaciones: String = ""
+    
+    // Items
+    @State private var items: [BudgetItem] = []
+    
+    // Impuestos
+    @State private var ivaPercentage: Double = 21.0
+    @State private var irpfPercentage: Double = 0.0
+    
+    // Totales
+    @State private var baseImponible: Double = 0.0
+    @State private var totalIVA: Double = 0.0
+    @State private var totalIRPF: Double = 0.0
+    @State private var totalBudget: Double = 0.0
+    
+    private var numberFormatter: NumberFormatter {
+        let nf = NumberFormatter()
+        nf.locale = Locale(identifier: "es_ES")
+        nf.numberStyle = .decimal
+        nf.minimumFractionDigits = 0
+        nf.maximumFractionDigits = 2
+        nf.usesGroupingSeparator = false
+        nf.generatesDecimalNumbers = true
+        return nf
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(budgetToEdit == nil ? "Nuevo Presupuesto" : "Editar Presupuesto")
+                .font(.title)
+            
+            // Datos principales
+            HStack {
+                Text("N.º Presupuesto:")
+                TextField("", value: $budgetNumber, formatter: NumberFormatter())
+                    .frame(width: 60)
+            }
+            HStack {
+                Text("Fecha:")
+                TextField("dd/MM/yyyy", text: $budgetDate)
+                    .frame(width: 120)
+            }
+            
+            // Emisor
+            Text("Seleccionar Emisor").font(.headline)
+            Picker("Emisor", selection: $issuerId) {
+                Text("-- Ninguno --").tag(Int?.none)
+                ForEach(dbManager.fetchAllIssuers()) { issuer in
+                    Text("\(issuer.name)")
+                        .tag(issuer.id as Int?)
+                }
+            }
+            
+            // Cliente
+            Text("Seleccionar Cliente").font(.headline)
+            Picker("Cliente", selection: $clientId) {
+                Text("-- Ninguno --").tag(Int?.none)
+                ForEach(dbManager.clients) { c in
+                    // Muestra nick igual que en createinvoice
+                    if c.nick.isEmpty {
+                        Text(c.name).tag(c.id as Int?)
+                    } else {
+                        Text("\(c.name) (\(c.nick))")
+                            .tag(c.id as Int?)
+                    }
+                }
+            }
+            
+            // Observaciones
+            Text("Observaciones")
+            TextEditor(text: $observaciones)
+                .frame(minHeight: 60)
+                .border(Color.gray.opacity(0.5))
+            
+            // Lineas del Presupuesto
+            Text("Líneas del Presupuesto").font(.headline)
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Cabecera
+                    HStack {
+                        Text("Concepto").frame(width: 120, alignment: .leading)
+                        Text("Modelo").frame(width: 80, alignment: .leading)
+                        Text("Bastidor").frame(width: 80, alignment: .leading)
+                        Text("Fecha").frame(width: 60, alignment: .leading)
+                        Text("Importe").frame(width: 80, alignment: .trailing)
+                        Spacer().frame(width: 30)
+                    }
+                    .padding(.vertical, 4)
+                    
+                    Divider()
+                    
+                    // Filas
+                    ForEach($items, id: \.id) { $item in
+                        HStack {
+                            TextField("", text: $item.concept)
+                                .frame(width: 120)
+                            TextField("", text: $item.model)
+                                .frame(width: 80)
+                            TextField("", text: $item.bastidor)
+                                .frame(width: 80)
+                            TextField("", text: $item.itemDate)
+                                .frame(width: 60)
+                            TextField("", value: $item.amount, formatter: numberFormatter)
+                                .frame(width: 80)
+                                .multilineTextAlignment(.trailing)
+                            
+                            Button {
+                                removeItem(item)
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.red)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .frame(width: 30)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    
+                    Button("Añadir línea") {
+                        let newItem = BudgetItem(
+                            id: nil,
+                            concept: "",
+                            model: "",
+                            bastidor: "",
+                            itemDate: "",
+                            amount: 0.0
+                        )
+                        items.append(newItem)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            .frame(minHeight: 150, maxHeight: 250)
+            .border(Color.gray)
+            
+            // Impuestos
+            VStack(alignment: .leading) {
+                HStack {
+                    Text("IVA (%)")
+                    TextField("", value: $ivaPercentage, formatter: numberFormatter)
+                        .frame(width: 60)
+                }
+                HStack {
+                    Text("IRPF (%)")
+                    TextField("", value: $irpfPercentage, formatter: numberFormatter)
+                        .frame(width: 60)
+                }
+            }
+            
+            // Totales
+            VStack(alignment: .leading) {
+                Text(String(format: "Base: %.2f €", baseImponible))
+                Text(String(format: "IVA: %.2f €", totalIVA))
+                Text(String(format: "IRPF: %.2f €", totalIRPF))
+                Text(String(format: "TOTAL: %.2f €", totalBudget))
+                    .fontWeight(.bold)
+            }
+            .padding(.top, 4)
+            
+            // Botón Guardar
+            HStack {
+                Spacer()
+                Button("Guardar") {
+                    saveBudget()
+                }
+            }
+        }
+        .padding()
+        .onAppear {
+            print("DEBUG CreateBudgetView onAppear - Empezamos setupView()")
+            setupView()
+        }
+        .onChange(of: items) { _ in recalcTotals() }
+        .onChange(of: ivaPercentage) { _ in recalcTotals() }
+        .onChange(of: irpfPercentage) { _ in recalcTotals() }
+    }
+    
+    private func setupView() {
+        if let b = budgetToEdit {
+            budgetNumber   = b.budgetNumber
+            budgetDate     = b.budgetDate
+            issuerId       = b.issuerId == 0 ? nil : b.issuerId
+            clientId       = b.clientId == 0 ? nil : b.clientId
+            observaciones  = b.observaciones
+            items          = b.items
+            ivaPercentage  = b.ivaPercentage
+            irpfPercentage = b.irpfPercentage
+            baseImponible  = b.baseImponible
+            totalIVA       = b.totalIVA
+            totalIRPF      = b.totalIRPF
+            totalBudget    = b.totalBudget
+        } else {
+            let df = DateFormatter()
+            df.dateFormat = "dd/MM/yyyy"
+            budgetDate = df.string(from: Date())
+        }
+        recalcTotals()
+    }
+    
+    private func removeItem(_ target: BudgetItem) {
+        if let idx = items.firstIndex(where: { $0.id == target.id }) {
+            items.remove(at: idx)
+            recalcTotals()
+        }
+    }
+    
+    private func recalcTotals() {
+        let base = items.reduce(0.0) { $0 + $1.amount }
+        baseImponible = base
+        
+        let iva = base * (ivaPercentage / 100.0)
+        totalIVA = iva
+        
+        let irpf = base * (irpfPercentage / 100.0)
+        totalIRPF = irpf
+        
+        totalBudget = base + iva - irpf
+    }
+    
+    private func saveBudget() {
+        recalcTotals()
+        let b = Budget(
+            id: budgetToEdit?.id,
+            budgetNumber: budgetNumber,
+            budgetDate: budgetDate,
+            issuerId: issuerId ?? 0,
+            clientId: clientId ?? 0,
+            observaciones: observaciones,
+            items: items,
+            ivaPercentage: ivaPercentage,
+            irpfPercentage: irpfPercentage,
+            baseImponible: baseImponible,
+            totalIVA: totalIVA,
+            totalIRPF: totalIRPF,
+            totalBudget: totalBudget
+        )
+        if budgetToEdit == nil {
+            dbManager.insertBudget(b)
+        } else {
+            dbManager.updateBudget(b)
+        }
+        dismiss()
+    }
+}
+
+-----
+
+codigo 21: (./MyInvoiceApp/Views/PagedBudgetDetailView.swift)
+import SwiftUI
+
+struct PagedBudgetDetailView: View {
+    let budget: Budget
+    
+    @EnvironmentObject var dbManager: DatabaseManager  // para buscar issuer & client + ruta del logo
+    
+    // MAX filas
+    let maxRowsPerPage = 25
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            headerView
+            
+            Divider()
+            Text("Detalle del Presupuesto")
+                .font(.title3)
+            
+            // Dividir items en páginas
+            let pages = buildPages(from: budget.items, maxRows: maxRowsPerPage)
+            
+            ForEach(pages.indices, id: \.self) { pageIndex in
+                VStack(alignment: .leading, spacing: 0) {
+                    tableHeader()
+                    ForEach(pages[pageIndex], id: \.id) { item in
+                        rowView(item)
+                            .frame(height: 24)
+                    }
+                }
+                .padding(.vertical, 6)
+                .border(Color.black.opacity(0.2), width: 1)
+                .padding(.bottom, 20)
+            }
+            
+            if !budget.observaciones.isEmpty {
+                Divider()
+                Text("Observaciones:").font(.headline)
+                Text(budget.observaciones)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            
+            Divider()
+            
+            // Mismo sistema: logo custom o etm.png
+            let customLogoPath = dbManager.getSettingValue(forKey: "custom_logo_path")
+            if !customLogoPath.isEmpty {
+                let fileURL = URL(fileURLWithPath: customLogoPath)
+                if let nsimg = NSImage(contentsOf: fileURL) {
+                    ImageViewRepresentable(nsImage: nsimg, width: 200, height: 80)
+                        .padding(.vertical, 8)
+                } else {
+                    Text("[No se pudo cargar el logo personalizado]")
+                        .foregroundColor(.red)
+                        .padding(.vertical, 8)
+                }
+            } else {
+                if let url = Bundle.main.url(forResource: "etm", withExtension: "png"),
+                   let nsimg = NSImage(contentsOf: url) {
+                    ImageViewRepresentable(nsImage: nsimg, width: 200, height: 80)
+                        .padding(.vertical, 8)
+                } else {
+                    Text("[No se encontró etm.png en el bundle]")
+                        .foregroundColor(.red)
+                        .padding(.vertical, 8)
+                }
+            }
+            
+            totalsView
+        }
+        .padding()
+        .background(Color.white)
+        .environment(\.colorScheme, .light)
+    }
+    
+    // ARREGLADO: un solo contenedor (VStack) que engloba todo
+    private var headerView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Bloque 1: Emisor y Cliente
+            HStack(alignment: .top) {
+                // Emisor
+                VStack(alignment: .leading, spacing: 2) {
+                    if let issuer = dbManager.fetchAllIssuers().first(where: { $0.id == budget.issuerId }) {
+                        Text(issuer.name).font(.headline)
+                        Text(issuer.address)
+                        Text("NIF: \(issuer.nif)")
+                        if !issuer.phone.isEmpty {
+                            Text("Tel: \(issuer.phone)")
+                        }
+                    } else {
+                        Text("(Sin Emisor seleccionado)")
+                            .font(.subheadline)
+                    }
+                }
+                Spacer()
+                
+                // Cliente
+                VStack(alignment: .trailing, spacing: 2) {
+                    if let client = dbManager.clients.first(where: { $0.id == budget.clientId }) {
+                        Text("Cliente: \(client.name)").font(.headline)
+                        Text(client.address)
+                        Text("NIF/CIF: \(client.nif)")
+                        if !client.nick.isEmpty {
+                            Text("(Nick: \(client.nick))")
+                        }
+                    } else {
+                        Text("(Sin Cliente seleccionado)")
+                            .font(.subheadline)
+                    }
+                }
+            }
+            .padding(.bottom, 6)
+            
+            // Bloque 2: Título y fecha del presupuesto
+            VStack(alignment: .leading) {
+                Text("Presupuesto N.º \(budget.budgetNumber)")
+                    .font(.headline)
+                Text("Fecha: \(budget.budgetDate)")
+            }
+        }
+    }
+    
+    private func tableHeader() -> some View {
+        HStack {
+            Text("Concepto").bold().frame(width: 100, alignment: .leading)
+            Text("Modelo").bold().frame(width: 80, alignment: .leading)
+            Text("Bastidor").bold().frame(width: 80, alignment: .leading)
+            Text("Fecha").bold().frame(width: 80, alignment: .leading)
+            Text("Importe").bold().frame(width: 80, alignment: .trailing)
+        }
+        .padding(.bottom, 2)
+    }
+    
+    private func rowView(_ item: BudgetItem) -> some View {
+        HStack {
+            Text(item.concept).frame(width: 100, alignment: .leading)
+            Text(item.model).frame(width: 80, alignment: .leading)
+            Text(item.bastidor).frame(width: 80, alignment: .leading)
+            Text(item.itemDate).frame(width: 80, alignment: .leading)
+            Text(String(format: "%.2f", item.amount)).frame(width: 80, alignment: .trailing)
+        }
+    }
+    
+    private var totalsView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(String(format: "Base: %.2f €", budget.baseImponible))
+            Text(String(format: "IVA: %.2f €", budget.totalIVA))
+            Text(String(format: "IRPF: %.2f €", budget.totalIRPF))
+            Text(String(format: "TOTAL: %.2f €", budget.totalBudget))
+                .fontWeight(.bold)
+        }
+        .padding(.top, 6)
+    }
+    
+    // Partir items en páginas
+    private func buildPages(from items: [BudgetItem], maxRows: Int) -> [[BudgetItem]] {
+        var result: [[BudgetItem]] = []
+        var startIndex = 0
+        while startIndex < items.count {
+            let endIndex = min(startIndex + maxRows, items.count)
+            let slice = Array(items[startIndex..<endIndex])
+            result.append(slice)
+            startIndex += maxRows
+        }
+        if items.isEmpty {
+            result = [[]]
+        }
+        return result
+    }
+}
+
+-----
+
+codigo 22: (./MyInvoiceApp/Views/BudgetsView.swift)
+import SwiftUI
+
+struct BudgetsView: View {
+    @EnvironmentObject var dbManager: DatabaseManager
+    @Environment(\.dismiss) var dismiss
+
+    @State private var budgets: [Budget] = []
+    @State private var showCreateBudget = false
+    @State private var showEditBudget   = false
+
+    @State private var selectedBudget: Budget? = nil
+
+    var body: some View {
+        VStack {
+            Text("Presupuestos")
+                .font(.largeTitle)
+                .padding(.bottom, 8)
+
+            List(budgets) { bdg in
+                VStack(alignment: .leading) {
+                    Text("Presupuesto N.º \(bdg.budgetNumber)")
+                        .font(.headline)
+                    Text("Fecha: \(bdg.budgetDate)")
+                    Text(String(format: "Total: %.2f €", bdg.totalBudget))
+                        .font(.footnote)
+                }
+                .contextMenu {
+                    Button("Exportar PDF") {
+                        selectedBudget = bdg
+                        exportBudgetPDFNoPanel(bdg)
+                    }
+                    Button("Previsualizar") {
+                        selectedBudget = bdg
+                        previewBudget(bdg)
+                    }
+                    Button("Editar") {
+                        selectedBudget = bdg
+                        showEditBudget = true
+                    }
+                    Button("Borrar", role: .destructive) {
+                        dbManager.deleteBudget(bdg)
+                        loadBudgets()
+                    }
+                }
+            }
+            .frame(minWidth: 500, minHeight: 300)
+
+            HStack {
+                Button("Nuevo Presupuesto") {
+                    selectedBudget = nil
+                    showCreateBudget = true
+                }
+                Spacer()
+                Button("Cerrar") {
+                    dismiss()
+                }
+            }
+            .padding(.top, 6)
+        }
+        .padding()
+        .sheet(isPresented: $showCreateBudget, onDismiss: {
+            loadBudgets()
+        }) {
+            CreateBudgetView(budgetToEdit: nil)
+                .environmentObject(dbManager)
+        }
+        .sheet(isPresented: $showEditBudget, onDismiss: {
+            loadBudgets()
+        }) {
+            if let bdg = selectedBudget {
+                CreateBudgetView(budgetToEdit: bdg)
+                    .environmentObject(dbManager)
+            }
+        }
+        .onAppear {
+            loadBudgets()
+        }
+    }
+
+    private func loadBudgets() {
+        budgets = dbManager.fetchAllBudgets()
+    }
+
+    // Función para exportar el presupuesto a PDF sin panel
+    private func exportBudgetPDFNoPanel(_ budget: Budget) {
+        print("DEBUG BudgetsView: exportBudgetPDFNoPanel -> \(budget)")
+
+        let scaled = ScaledView(scale: 0.85) {
+            // Inyectamos el dbManager aquí para que PagedBudgetDetailView
+            // tenga acceso a .environmentObject(DatabaseManager)
+            PagedBudgetDetailView(budget: budget)
+                .environmentObject(dbManager)
+        }
+        let multiPageView = MultiPageNSView(rootView: scaled)
+
+        let printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
+        printInfo.paperSize = NSSize(width: 595, height: 842) // A4
+        printInfo.orientation = .portrait
+        printInfo.leftMargin   = 0
+        printInfo.rightMargin  = 0
+        printInfo.topMargin    = 0
+        printInfo.bottomMargin = 0
+        printInfo.isHorizontallyCentered = false
+        printInfo.isVerticallyCentered   = false
+        printInfo.horizontalPagination   = .clip
+        printInfo.verticalPagination     = .clip
+        printInfo.scalingFactor         = 1.0
+
+        let operation = NSPrintOperation(view: multiPageView, printInfo: printInfo)
+        // Sin panel de impresión
+        operation.showsPrintPanel    = false
+        operation.showsProgressPanel = false
+
+        let panel = NSSavePanel()
+        panel.title = "Exportar Presupuesto a PDF (sin panel de impresión)"
+        panel.nameFieldStringValue = "Presupuesto-\(budget.budgetNumber)"
+        panel.allowedFileTypes = ["pdf"]
+
+        if panel.runModal() == .OK, let url = panel.url {
+            operation.printInfo.jobDisposition = .save
+            operation.printInfo.dictionary().setValue(
+                url,
+                forKey: NSPrintInfo.AttributeKey.jobSavingURL.rawValue
+            )
+
+            let success = operation.run()
+            if success {
+                print("PDF exportado en \(url.path)")
+            } else {
+                print("ERROR BudgetsView: al exportar PDF (No se completó la operación).")
+            }
+        }
+    }
+
+    // Función para previsualizar el presupuesto (mostrando el panel de impresión)
+    private func previewBudget(_ budget: Budget) {
+        print("DEBUG BudgetsView: previewBudget -> \(budget)")
+
+        let scaled = ScaledView(scale: 0.85) {
+            PagedBudgetDetailView(budget: budget)
+                .environmentObject(dbManager)
+        }
+        let multiPageView = MultiPageNSView(rootView: scaled)
+
+        let printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
+        printInfo.paperSize = NSSize(width: 595, height: 842) // A4
+        printInfo.orientation = .portrait
+        printInfo.leftMargin   = 0
+        printInfo.rightMargin  = 0
+        printInfo.topMargin    = 0
+        printInfo.bottomMargin = 0
+        printInfo.isHorizontallyCentered = false
+        printInfo.isVerticallyCentered   = false
+        printInfo.horizontalPagination   = .clip
+        printInfo.verticalPagination     = .clip
+        printInfo.scalingFactor         = 1.0
+
+        let operation = NSPrintOperation(view: multiPageView, printInfo: printInfo)
+        // Habilitamos el panel de impresión para previsualizar
+        operation.showsPrintPanel    = true
+        operation.showsProgressPanel = true
+
+        // Ejecutamos la operación, lo que abrirá la previsualización
+        _ = operation.run()
+    }
+}
+
+-----
+
+codigo 23: (./MyInvoiceApp/Views/InformesView.swift)
+import SwiftUI
+import Charts  // Framework nativo de Apple para gráficas (macOS 13+)
+
+/// Estructura auxiliar para la gráfica
+struct MonthlyData: Identifiable {
+    let id = UUID()
+    let month: String   // Por ejemplo "2025-03"
+    let total: Double   // Total facturado ese mes
+}
+
+struct InformesView: View {
+    
+    @EnvironmentObject var dbManager: DatabaseManager
+    @Environment(\.dismiss) var dismiss
+    
+    // Fechas para el filtro
+    @State private var startDate: Date = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
+    @State private var endDate: Date   = Date()
+    
+    // Resultados
+    @State private var filteredInvoices: [Invoice] = []
+    @State private var totalBaseImponible: Double = 0
+    @State private var totalIVA: Double = 0
+    @State private var totalIRPF: Double = 0
+    @State private var totalFactura: Double = 0
+    
+    // Datos para la gráfica
+    @State private var monthlyChartData: [MonthlyData] = []
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Informes de Facturación")
+                .font(.title)
+            
+            // Filtro de fechas
+            HStack {
+                Text("Desde:")
+                DatePicker("", selection: $startDate, displayedComponents: .date)
+                    .labelsHidden()
+                
+                Text("Hasta:")
+                DatePicker("", selection: $endDate, displayedComponents: .date)
+                    .labelsHidden()
+                
+                Button("Generar Informe") {
+                    generarInforme()
+                }
+            }
+            .padding(.bottom, 8)
+            
+            // Totales en el período
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Totales en el período:")
+                    .font(.headline)
+                HStack {
+                    Text("Base Imponible:")
+                    Spacer()
+                    Text(String(format: "%.2f €", totalBaseImponible))
+                }
+                HStack {
+                    Text("Total IVA:")
+                    Spacer()
+                    Text(String(format: "%.2f €", totalIVA))
+                }
+                HStack {
+                    Text("Total IRPF:")
+                    Spacer()
+                    Text(String(format: "%.2f €", totalIRPF))
+                }
+                HStack {
+                    Text("Total Factura:")
+                        .fontWeight(.bold)
+                    Spacer()
+                    Text(String(format: "%.2f €", totalFactura))
+                        .fontWeight(.bold)
+                }
+            }
+            .padding(.bottom, 8)
+            
+            // Lista de facturas filtradas
+            if !filteredInvoices.isEmpty {
+                Text("Facturas encontradas: \(filteredInvoices.count)")
+                    .font(.headline)
+                
+                List(filteredInvoices) { inv in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Factura N.º \(inv.invoiceNumber)")
+                            .font(.subheadline)
+                        Text("Fecha: \(inv.invoiceDate)")
+                        Text(String(format: "Total: %.2f €", inv.totalFactura))
+                            .fontWeight(.bold)
+                    }
+                }
+                .frame(minHeight: 200)
+            } else {
+                Text("No hay facturas en este rango.")
+                    .foregroundColor(.secondary)
+            }
+            
+            // Gráficos: “Quesito” + Barras
+            if !monthlyChartData.isEmpty {
+                Text("Facturación por Mes")
+                    .font(.headline)
+                    .padding(.top, 8)
+                
+                HStack(alignment: .top, spacing: 30) {
+                    
+                    // --------- GRÁFICO DE SECTORES (“QUESITO”) ---------
+                    Chart(monthlyChartData) { data in
+                        SectorMark(
+                            angle: .value("Total Facturado", data.total),
+                            innerRadius: .ratio(0.6),
+                            outerRadius: .ratio(0.95)
+                        )
+                        .foregroundStyle(by: .value("Mes", data.month))
+                        .annotation(position: .overlay) {
+                            Text(String(format: "%.0f", data.total))
+                                .font(.caption2)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .frame(width: 300, height: 300)
+                    .chartLegend(.visible)
+                    
+                    // --------- GRÁFICO DE BARRAS (EXISTENTE) ---------
+                    ScrollView(.horizontal) {
+                        Chart(monthlyChartData) { data in
+                            BarMark(
+                                x: .value("Mes", data.month),
+                                y: .value("Total Facturado", data.total)
+                            )
+                        }
+                        .frame(height: 300)
+                        .padding()
+                    }
+                }
+            } else {
+                Text("No hay datos para la gráfica en este rango.")
+                    .foregroundColor(.secondary)
+                    .padding(.top, 8)
+            }
+            
+            // Botón para cerrar la vista
+            HStack {
+                Spacer()
+                Button("Cerrar") {
+                    dismiss()
+                }
+                .padding(.top, 8)
+            }
+        }
+        .padding()
+        .frame(minWidth: 900, minHeight: 600)
+        .onAppear {
+            generarInforme()
+        }
+    }
+    
+    // MARK: - Lógica para generar el informe
+    private func generarInforme() {
+        // 1. Preparar DateFormatter para parsear invoiceDate (formato "dd/MM/yyyy")
+        let df = DateFormatter()
+        df.dateFormat = "dd/MM/yyyy"
+        
+        // 2. Filtrar facturas según startDate y endDate
+        let invoices = dbManager.invoices.filter { inv in
+            guard let d = df.date(from: inv.invoiceDate) else { return false }
+            return (d >= startDate && d <= endDate)
+        }
+        self.filteredInvoices = invoices
+        
+        // 3. Calcular sumas globales
+        totalBaseImponible = invoices.reduce(0) { $0 + $1.baseImponible }
+        totalIVA           = invoices.reduce(0) { $0 + $1.totalIVA }
+        totalIRPF          = invoices.reduce(0) { $0 + $1.totalIRPF }
+        totalFactura       = invoices.reduce(0) { $0 + $1.totalFactura }
+        
+        // 4. Construir un diccionario con facturación por mes real
+        let monthFormatter = DateFormatter()
+        monthFormatter.dateFormat = "yyyy-MM"  // ejemplo: "2025-03"
+        
+        var monthlyTotals: [String: Double] = [:]
+        
+        for inv in invoices {
+            if let date = df.date(from: inv.invoiceDate) {
+                let key = monthFormatter.string(from: date)
+                monthlyTotals[key, default: 0] += inv.totalFactura
+            }
+        }
+        
+        // 5. Generar la lista de meses desde startDate hasta endDate (mes a mes)
+        var allMonthKeys: [String] = []
+        let calendar = Calendar.current
+        
+        guard let startOfMonth = calendar.date(from: DateComponents(
+            year:  calendar.component(.year,  from: startDate),
+            month: calendar.component(.month, from: startDate)
+        )),
+        let endOfMonth = calendar.date(from: DateComponents(
+            year:  calendar.component(.year,  from: endDate),
+            month: calendar.component(.month, from: endDate)
+        )) else {
+            self.monthlyChartData = []
+            return
+        }
+        
+        var current = startOfMonth
+        while current <= endOfMonth {
+            let key = monthFormatter.string(from: current)
+            allMonthKeys.append(key)
+            
+            if let next = calendar.date(byAdding: .month, value: 1, to: current) {
+                current = next
+            } else {
+                break
+            }
+        }
+        
+        // 6. Para cada mes posible en el rango, asignar el total o 0
+        var tempData: [MonthlyData] = []
+        for key in allMonthKeys {
+            let total = monthlyTotals[key] ?? 0
+            tempData.append(MonthlyData(month: key, total: total))
+        }
+        
+        self.monthlyChartData = tempData
+    }
+}
+
+-----
+
+codigo 24: (./MyInvoiceApp/Views/PagedInvoiceDetailView.swift)
+import SwiftUI
+import AppKit
+
+/// Vista "paginada" que divide los items en bloques de 25
+/// y así no corta filas entre páginas.
+struct PagedInvoiceDetailView: View {
+    let invoice: Invoice
+    
+    // Ajusta cuántas filas por página quieras
+    let maxRowsPerPage = 25
+
+    // Para ejemplo, cada fila la dibujaremos con un alto fijo ~ 24-30
+    let rowHeight: CGFloat = 30
+
+    // NUEVO: para acceder a la ruta del logo
+    @EnvironmentObject var dbManager: DatabaseManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // CABECERA (emisor / cliente)
+            headerView
+
+            Divider()
+            Text("Detalle de Factura")
+                .font(.title3)
+            
+            // Dividimos items en bloques
+            let pages = buildPages(from: invoice.items, maxRows: maxRowsPerPage)
+            
+            // Dibujamos cada "página" (bloque)
+            ForEach(pages.indices, id: \.self) { pageIndex in
+                VStack(alignment: .leading, spacing: 0) {
+                    // Cabecera de tabla
+                    tableHeader()
+
+                    // Filas de esta "página"
+                    ForEach(pages[pageIndex], id: \.localUUID) { item in
+                        rowView(item)
+                            .frame(height: rowHeight)
+                    }
+                }
+                .padding(.vertical, 8)
+                .border(Color.black.opacity(0.2), width: 1)
+                .padding(.bottom, 20) // espaciado entre páginas
+            }
+
+            // Observaciones
+            if !invoice.observaciones.isEmpty {
+                Divider()
+                Text("Observaciones:").font(.headline)
+                Text(invoice.observaciones)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            // AQUÍ cambiamos para cargar logo personalizado o etm.png
+            let customLogoPath = dbManager.getSettingValue(forKey: "custom_logo_path")
+            if !customLogoPath.isEmpty {
+                let fileURL = URL(fileURLWithPath: customLogoPath)
+                if let nsimg = NSImage(contentsOf: fileURL) {
+                    ImageViewRepresentable(nsImage: nsimg, width: 200, height: 80)
+                        .padding(.vertical, 8)
+                } else {
+                    Text("[No se pudo cargar el logo personalizado]")
+                        .foregroundColor(.red)
+                        .padding(.vertical, 8)
+                }
+            } else {
+                // Si no hay ruta => usar etm.png por defecto
+                if let url = Bundle.main.url(forResource: "etm", withExtension: "png"),
+                   let nsimg = NSImage(contentsOf: url) {
+                    ImageViewRepresentable(nsImage: nsimg, width: 200, height: 80)
+                        .padding(.vertical, 8)
+                } else {
+                    Text("[No se encontró etm.png en el bundle]")
+                        .foregroundColor(.red)
+                        .padding(.vertical, 8)
+                }
+            }
+
+            // TOTALES
+            totalsView
+        }
+        .padding()
+        .background(Color.white)
+        .environment(\.colorScheme, .light)
+    }
+
+    // -------------- Vistas Auxiliares --------------
+    private var headerView: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(invoice.issuerName).font(.headline)
+                Text(invoice.issuerAddress)
+                Text("NIF: \(invoice.issuerNIF)")
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("Factura N.º \(invoice.invoiceNumber)").font(.headline)
+                Text("Fecha: \(invoice.invoiceDate)")
+                Text("Cliente: \(invoice.clientName)")
+                Text(invoice.clientAddress)
+                Text("NIF/CIF: \(invoice.clientNIF)")
+            }
+        }
+    }
+
+    private func tableHeader() -> some View {
+        HStack {
+            Text("Concepto").bold().frame(width: 100, alignment: .leading)
+            Text("Modelo").bold().frame(width: 100, alignment: .leading)
+            Text("Bastidor").bold().frame(width: 100, alignment: .leading)
+            Text("Fecha").bold().frame(width: 80, alignment: .leading)
+            Text("Importe").bold().frame(width: 80, alignment: .trailing)
+        }
+        .padding(.bottom, 4)
+    }
+
+    private func rowView(_ item: InvoiceItem) -> some View {
+        HStack {
+            Text(item.concept)
+                .frame(width: 100, alignment: .leading)
+            Text(item.model)
+                .frame(width: 100, alignment: .leading)
+            Text(item.bastidor)
+                .frame(width: 100, alignment: .leading)
+            Text(item.date)
+                .frame(width: 80, alignment: .leading)
+            Text(String(format: "%.2f", item.amount))
+                .frame(width: 80, alignment: .trailing)
+        }
+    }
+
+    private var totalsView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Base Imponible:")
+                Spacer()
+                Text(String(format: "%.2f €", invoice.baseImponible))
+            }
+            HStack {
+                Text("IVA (\(invoice.ivaPercentage, specifier: "%.2f")%)")
+                Spacer()
+                Text(String(format: "%.2f €", invoice.totalIVA))
+            }
+            HStack {
+                Text("IRPF (\(invoice.irpfPercentage, specifier: "%.2f")%)")
+                Spacer()
+                Text(String(format: "%.2f €", invoice.totalIRPF))
+            }
+            HStack {
+                Text("Total Factura:").fontWeight(.bold)
+                Spacer()
+                Text(String(format: "%.2f €", invoice.totalFactura))
+                    .fontWeight(.bold)
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    // -------------- Partir items en bloques --------------
+    private func buildPages(from items: [InvoiceItem],
+                            maxRows: Int) -> [[InvoiceItem]] {
+        var result: [[InvoiceItem]] = []
+        var startIndex = 0
+        while startIndex < items.count {
+            let endIndex = min(startIndex + maxRows, items.count)
+            let slice = Array(items[startIndex..<endIndex])
+            result.append(slice)
+            startIndex += maxRows
+        }
+        return result
+    }
+}
+
+-----
+
+codigo 25: (./MyInvoiceApp/Views/InvoiceDetailView.swift)
+import SwiftUI
+import AppKit
+
+struct InvoiceDetailView: View {
+    let invoice: Invoice
+    
+    // Para acceder a la ruta custom del logo
+    @EnvironmentObject var dbManager: DatabaseManager
+
+    var body: some View {
+        ScrollView { // Se agrega un ScrollView para permitir el desplazamiento vertical
+            VStack(alignment: .leading, spacing: 8) {
+                
+                // ENCABEZADO
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(invoice.issuerName).font(.headline)
+                        Text(invoice.issuerAddress)
+                        Text("NIF: \(invoice.issuerNIF)")
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("Factura N.º \(invoice.invoiceNumber)").font(.headline)
+                        Text("Fecha: \(invoice.invoiceDate)")
+                        Text("Cliente: \(invoice.clientName)")
+                        Text(invoice.clientAddress)
+                        Text("NIF/CIF: \(invoice.clientNIF)")
+                    }
+                }
+                
+                Divider()
+                
+                Text("Detalle de Factura")
+                    .font(.title3)
+                    .padding(.vertical, 4)
+                
+                // CABECERA DE TABLA
+                HStack(alignment: .top) {
+                    Text("Concepto").bold().frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Modelo").bold().frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Bastidor").bold().frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Fecha").bold().frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Importe").bold().frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                
+                Divider()
+                
+                // FILAS DE ITEMS
+                ForEach(invoice.items, id: \.localUUID) { item in
+                    HStack(alignment: .top) {
+                        Text(item.concept)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        Text(item.model)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        Text(item.bastidor)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        Text(item.date)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        Text(String(format: "%.2f", item.amount))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                }
+                
+                // OBSERVACIONES
+                if !invoice.observaciones.isEmpty {
+                    Divider()
+                    Text("Observaciones:").font(.headline).padding(.top, 6)
+                    Text(invoice.observaciones)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, 4)
+                }
+                
+                Divider()
+                
+                // Logo: custom path o etm.png
+                let customLogoPath = dbManager.getSettingValue(forKey: "custom_logo_path")
+                if !customLogoPath.isEmpty {
+                    let fileURL = URL(fileURLWithPath: customLogoPath)
+                    if let nsimg = NSImage(contentsOf: fileURL) {
+                        ImageViewRepresentable(nsImage: nsimg, width: 200, height: 80)
+                            .padding(.vertical, 8)
+                    } else {
+                        Text("[No se pudo cargar el logo personalizado]")
+                            .foregroundColor(.red)
+                            .padding(.vertical, 8)
+                    }
+                } else {
+                    if let url = Bundle.main.url(forResource: "etm", withExtension: "png"),
+                       let nsimg = NSImage(contentsOf: url) {
+                        ImageViewRepresentable(nsImage: nsimg, width: 200, height: 80)
+                            .padding(.vertical, 8)
+                    } else {
+                        Text("[No se encontró etm.png en el main bundle]")
+                            .foregroundColor(.red)
+                            .padding(.vertical, 8)
+                    }
+                }
+                
+                // TOTALES
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Base Imponible:")
+                        Spacer()
+                        Text(String(format: "%.2f €", invoice.baseImponible))
+                    }
+                    HStack {
+                        Text("IVA (\(invoice.ivaPercentage, specifier: "%.2f")%)")
+                        Spacer()
+                        Text(String(format: "%.2f €", invoice.totalIVA))
+                    }
+                    HStack {
+                        Text("IRPF (\(invoice.irpfPercentage, specifier: "%.2f")%)")
+                        Spacer()
+                        Text(String(format: "%.2f €", invoice.totalIRPF))
+                    }
+                    HStack {
+                        Text("Total Factura:").fontWeight(.bold)
+                        Spacer()
+                        Text(String(format: "%.2f €", invoice.totalFactura))
+                            .fontWeight(.bold)
+                    }
+                }
+                .padding(.top, 6)
+            }
+            .padding()
+            .background(Color.white)
+            .environment(\.colorScheme, .light)
+        }
+    }
+}
+
+// -----------------------------------------------------
+// Definición de ImageViewRepresentable
+// -----------------------------------------------------
+struct ImageViewRepresentable: NSViewRepresentable {
+    let nsImage: NSImage
+    let width:  CGFloat
+    let height: CGFloat
+    
+    func makeNSView(context: Context) -> NSView {
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        
+        let imageView = NSImageView()
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+        imageView.image = nsImage
+        
+        container.addSubview(imageView)
+        
+        NSLayoutConstraint.activate([
+            imageView.widthAnchor.constraint(equalToConstant: width),
+            imageView.heightAnchor.constraint(equalToConstant: height),
+            imageView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            imageView.topAnchor.constraint(equalTo: container.topAnchor),
+            
+            container.bottomAnchor.constraint(equalTo: imageView.bottomAnchor),
+            container.trailingAnchor.constraint(greaterThanOrEqualTo: imageView.trailingAnchor)
+        ])
+        
+        return container
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // no-op
+    }
+}
+
+-----
+
+codigo 26: (./MyInvoiceApp/Views/ContentView.swift)
+import SwiftUI
+import AppKit // para NSPrintOperation
+
+struct ContentView: View {
+    @EnvironmentObject var dbManager: DatabaseManager
+
+    @State private var showCreateInvoice = false
+    @State private var showEditInvoice   = false
+    @State private var showPrintPreview  = false
+    @State private var selectedInvoice: Invoice? = nil
+
+    @State private var showClientsView  = false
+    @State private var showReportsView  = false
+
+    // Para Presupuestos, Gastos, Servicios, Emisores
+    @State private var showBudgetsView  = false
+    @State private var showExpensesView = false
+    @State private var showServicesView = false
+    @State private var showIssuersView  = false
+    
+    // NUEVO: Para mostrar la ventana de configuración de logo
+    @State private var showLogoSettings = false
+
+    // Factor de escalado al imprimir
+    let forcedScale: CGFloat = 0.85
+
+    var body: some View {
+        NavigationView {
+            List {
+                ForEach(dbManager.invoices) { inv in
+                    VStack(alignment: .leading) {
+                        Text("Factura N.º \(inv.invoiceNumber)")
+                            .font(.headline)
+                        Text("Fecha: \(inv.invoiceDate)")
+                            .font(.subheadline)
+                        Text("Cliente: \(inv.clientName)")
+                            .font(.footnote)
+                    }
+                    .contextMenu {
+                        Button("Editar") {
+                            selectedInvoice = inv
+                            showEditInvoice = true
+                        }
+                        Button("Eliminar", role: .destructive) {
+                            dbManager.deleteInvoice(inv)
+                        }
+                        Button("Ver / Imprimir (preview)") {
+                            selectedInvoice = inv
+                            showPrintPreview = true
+                        }
+                        Button("Imprimir directo") {
+                            printDirectly(invoice: inv)
+                        }
+                        Button("Exportar PDF directo") {
+                            exportPDFDirectly(invoice: inv)
+                        }
+                        // NUEVA OPCIÓN: Exportar PDF sin panel
+                        Button("Exportar PDF sin panel") {
+                            exportPDFDirectlyNoPanel(invoice: inv)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Facturas")
+            .toolbar {
+                ToolbarItemGroup {
+                    // Botón Nueva Factura
+                    Button {
+                        showCreateInvoice = true
+                    } label: {
+                        Label("Nueva factura", systemImage: "plus")
+                    }
+                    // Botón Clientes (ahora con icono)
+                    Button {
+                        showClientsView = true
+                    } label: {
+                        Label("Clientes", systemImage: "person.2.fill")
+                    }
+                    // Botón Emisores (ahora con icono)
+                    Button {
+                        showIssuersView = true
+                    } label: {
+                        Label("Emisores", systemImage: "building.2.fill")
+                    }
+                    // Backup
+                    Button {
+                        backupDatabaseAction()
+                    } label: {
+                        Label("Backup DB", systemImage: "externaldrive.badge.plus")
+                    }
+                    // Restaurar / Cargar
+                    Button {
+                        loadDatabaseAction()
+                    } label: {
+                        Label("Cargar DB", systemImage: "arrow.down.doc")
+                    }
+                    // Informes
+                    Button {
+                        showReportsView = true
+                    } label: {
+                        Label("Informes", systemImage: "doc.text.magnifyingglass")
+                    }
+                    
+                    // ─────────────────────────────────────
+                    // NUEVOS BOTONES
+                    // ─────────────────────────────────────
+                    Button {
+                        showBudgetsView = true
+                    } label: {
+                        Label("Presupuestos", systemImage: "doc.text.fill")
+                    }
+                    Button {
+                        showExpensesView = true
+                    } label: {
+                        Label("Gastos", systemImage: "cart.fill")
+                    }
+                    Button {
+                        showServicesView = true
+                    } label: {
+                        Label("Servicios", systemImage: "wrench.and.screwdriver")
+                    }
+                    
+                    // NUEVO: Botón para configurar logo
+                    Button {
+                        showLogoSettings = true
+                    } label: {
+                        Label("Logo", systemImage: "photo")
+                    }
+                }
+            }
+
+            ZStack {
+                // Imagen con opacidad baja
+                Image("etm")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 300)
+                    .opacity(0.1)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        // Ventanas emergentes
+        .sheet(isPresented: $showCreateInvoice) {
+            CreateInvoiceView()
+        }
+        .sheet(isPresented: $showEditInvoice) {
+            if let invoice = selectedInvoice {
+                CreateInvoiceView(invoiceToEdit: invoice)
+            }
+        }
+        // AÑADIDO .environmentObject(dbManager) para que PrintPreviewView reciba el DatabaseManager
+        .sheet(isPresented: $showPrintPreview) {
+            if let invoice = selectedInvoice {
+                PrintPreviewView(invoice: invoice)
+                    .environmentObject(dbManager) // AÑADIDO
+            }
+        }
+        .sheet(isPresented: $showClientsView) {
+            ClientsView()
+        }
+        .sheet(isPresented: $showReportsView) {
+            InformesView()
+        }
+        .sheet(isPresented: $showBudgetsView) {
+            BudgetsView()
+        }
+        .sheet(isPresented: $showExpensesView) {
+            ExpensesView()
+        }
+        .sheet(isPresented: $showServicesView) {
+            ServicesView()
+        }
+        // Hoja: Emisores
+        .sheet(isPresented: $showIssuersView) {
+            IssuersView()
+        }
+        // NUEVO: Hoja para cambiar logo
+        .sheet(isPresented: $showLogoSettings) {
+            LogoSettingsView()
+                .environmentObject(dbManager)
+        }
+    }
+
+    // MARK: - Acciones backup / restaurar
+    private func backupDatabaseAction() {
+        let panel = NSSavePanel()
+        panel.title = "Exportar Copia de Seguridad"
+        panel.nameFieldStringValue = "BackupDB-\(Date().timeIntervalSince1970).sqlite"
+        panel.allowedFileTypes = ["sqlite"]
+
+        if panel.runModal() == .OK, let url = panel.url {
+            _ = dbManager.backupDatabase(to: url)
+        }
+    }
+
+    private func loadDatabaseAction() {
+        let panel = NSOpenPanel()
+        panel.title = "Cargar Copia de Seguridad"
+        panel.allowedFileTypes = ["sqlite"]
+
+        if panel.runModal() == .OK, let url = panel.url {
+            _ = dbManager.restoreDatabase(from: url)
+        }
+    }
+
+    // MARK: - Impresión directa
+    private func printDirectly(invoice: Invoice) {
+        let scaled = ScaledView(scale: forcedScale) {
+            PagedInvoiceDetailView(invoice: invoice)
+                .environmentObject(dbManager) // AÑADIDO para que no falle
+        }
+        let multiPageView = MultiPageNSView(rootView: scaled)
+
+        let printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
+        printInfo.paperSize = NSSize(width: 595, height: 842) // A4
+        printInfo.orientation = .portrait
+        printInfo.leftMargin   = 0
+        printInfo.rightMargin  = 0
+        printInfo.topMargin    = 0
+        printInfo.bottomMargin = 0
+        printInfo.isHorizontallyCentered = false
+        printInfo.isVerticallyCentered   = false
+        printInfo.horizontalPagination   = .clip
+        printInfo.verticalPagination     = .clip
+        printInfo.scalingFactor         = 1.0
+
+        let operation = NSPrintOperation(view: multiPageView, printInfo: printInfo)
+        operation.showsPrintPanel = true
+        operation.showsProgressPanel = true
+        operation.run()
+    }
+
+    // MARK: - Exportar PDF (con panel)
+    private func exportPDFDirectly(invoice: Invoice) {
+        let scaled = ScaledView(scale: forcedScale) {
+            PagedInvoiceDetailView(invoice: invoice)
+                .environmentObject(dbManager) // AÑADIDO
+        }
+        let multiPageView = MultiPageNSView(rootView: scaled)
+
+        let printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
+        printInfo.paperSize = NSSize(width: 595, height: 842)
+        printInfo.orientation = .portrait
+        printInfo.leftMargin   = 0
+        printInfo.rightMargin  = 0
+        printInfo.topMargin    = 0
+        printInfo.bottomMargin = 0
+        printInfo.isHorizontallyCentered = false
+        printInfo.isVerticallyCentered   = false
+        printInfo.horizontalPagination   = .clip
+        printInfo.verticalPagination     = .clip
+        printInfo.scalingFactor         = 1.0
+
+        let operation = NSPrintOperation(view: multiPageView, printInfo: printInfo)
+        operation.showsPrintPanel = false
+        operation.showsProgressPanel = false
+
+        let panel = NSSavePanel()
+        panel.title = "Exportar Factura a PDF"
+        panel.nameFieldStringValue = "Factura-\(invoice.invoiceNumber)"
+        panel.allowedFileTypes = ["pdf"]
+
+        if panel.runModal() == .OK, let url = panel.url {
+            operation.printInfo.dictionary().setValue("NSPrintSaveJob", forKey: "NSPrintJobDisposition")
+            operation.printInfo.dictionary().setValue(url, forKey: "NSPrintJobSavingURL")
+
+            let success = operation.run()
+            if success {
+                print("PDF exportado en \(url.path)")
+            } else {
+                print("ERROR al exportar PDF.")
+            }
+        }
+    }
+
+    // MARK: - Exportar PDF sin panel de impresión
+    private func exportPDFDirectlyNoPanel(invoice: Invoice) {
+        let scaled = ScaledView(scale: forcedScale) {
+            PagedInvoiceDetailView(invoice: invoice)
+                .environmentObject(dbManager) // AÑADIDO
+        }
+        let multiPageView = MultiPageNSView(rootView: scaled)
+
+        let printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
+        printInfo.paperSize = NSSize(width: 595, height: 842) // A4
+        printInfo.orientation = .portrait
+        printInfo.leftMargin   = 0
+        printInfo.rightMargin  = 0
+        printInfo.topMargin    = 0
+        printInfo.bottomMargin = 0
+        printInfo.isHorizontallyCentered = false
+        printInfo.isVerticallyCentered   = false
+        printInfo.horizontalPagination   = .clip
+        printInfo.verticalPagination     = .clip
+        printInfo.scalingFactor         = 1.0
+
+        let op = NSPrintOperation(view: multiPageView, printInfo: printInfo)
+        op.showsPrintPanel    = false
+        op.showsProgressPanel = false
+
+        let panel = NSSavePanel()
+        panel.title = "Exportar Factura a PDF (sin panel de impresión)"
+        panel.nameFieldStringValue = "Factura-\(invoice.invoiceNumber)"
+        panel.allowedFileTypes = ["pdf"]
+
+        if panel.runModal() == .OK, let url = panel.url {
+            op.printInfo.jobDisposition = .save
+            op.printInfo.dictionary().setValue(url, forKey: NSPrintInfo.AttributeKey.jobSavingURL.rawValue)
+
+            let success = op.run()
+            if success {
+                print("PDF exportado en \(url.path)")
+            } else {
+                print("ERROR al exportar PDF (no se completó la operación).")
+            }
+        }
+    }
+}
+
+-----
+

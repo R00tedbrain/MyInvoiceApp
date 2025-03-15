@@ -26,6 +26,16 @@ struct CreateBudgetView: View {
     @State private var totalIRPF: Double = 0.0
     @State private var totalBudget: Double = 0.0
     
+    // Estados para columnas personalizadas
+    @State private var labelConcept  = "Concepto"
+    @State private var labelModel    = "Modelo"
+    @State private var labelBastidor = "Bastidor"
+    @State private var labelDate     = "Fecha"
+    @State private var labelAmount   = "Importe"
+
+    // Para abrir la hoja de configuración de columnas
+    @State private var showColumnsSettings = false
+    
     private var numberFormatter: NumberFormatter {
         let nf = NumberFormatter()
         nf.locale = Locale(identifier: "es_ES")
@@ -69,7 +79,6 @@ struct CreateBudgetView: View {
             Picker("Cliente", selection: $clientId) {
                 Text("-- Ninguno --").tag(Int?.none)
                 ForEach(dbManager.clients) { c in
-                    // Muestra nick igual que en createinvoice
                     if c.nick.isEmpty {
                         Text(c.name).tag(c.id as Int?)
                     } else {
@@ -86,16 +95,28 @@ struct CreateBudgetView: View {
                 .border(Color.gray.opacity(0.5))
             
             // Lineas del Presupuesto
-            Text("Líneas del Presupuesto").font(.headline)
+            HStack {
+                Text("Líneas del Presupuesto").font(.headline)
+                Spacer()
+                Button("Editar Columnas") {
+                    showColumnsSettings = true
+                }
+            }
+            
             ScrollView {
                 VStack(spacing: 0) {
-                    // Cabecera
+                    // Cabecera (usa labels personalizadas)
                     HStack {
-                        Text("Concepto").frame(width: 120, alignment: .leading)
-                        Text("Modelo").frame(width: 80, alignment: .leading)
-                        Text("Bastidor").frame(width: 80, alignment: .leading)
-                        Text("Fecha").frame(width: 60, alignment: .leading)
-                        Text("Importe").frame(width: 80, alignment: .trailing)
+                        Text(labelConcept)
+                            .frame(width: 120, alignment: .leading)
+                        Text(labelModel)
+                            .frame(width: 80, alignment: .leading)
+                        Text(labelBastidor)
+                            .frame(width: 80, alignment: .leading)
+                        Text(labelDate)
+                            .frame(width: 60, alignment: .leading)
+                        Text(labelAmount)
+                            .frame(width: 80, alignment: .trailing)
                         Spacer().frame(width: 30)
                     }
                     .padding(.vertical, 4)
@@ -182,10 +203,17 @@ struct CreateBudgetView: View {
         .onAppear {
             print("DEBUG CreateBudgetView onAppear - Empezamos setupView()")
             setupView()
+            loadColumnLabels()
         }
         .onChange(of: items) { _ in recalcTotals() }
         .onChange(of: ivaPercentage) { _ in recalcTotals() }
         .onChange(of: irpfPercentage) { _ in recalcTotals() }
+
+        // Sheet para editar columnas
+        .sheet(isPresented: $showColumnsSettings, onDismiss: loadColumnLabels) {
+            ItemColumnsSettingsView()
+                .environmentObject(dbManager)
+        }
     }
     
     private func setupView() {
@@ -208,6 +236,23 @@ struct CreateBudgetView: View {
             budgetDate = df.string(from: Date())
         }
         recalcTotals()
+    }
+    
+    private func loadColumnLabels() {
+        let c1 = dbManager.getSettingValue(forKey: "column_concept_label")
+        labelConcept  = c1.isEmpty ? "Concepto" : c1
+
+        let c2 = dbManager.getSettingValue(forKey: "column_model_label")
+        labelModel    = c2.isEmpty ? "Modelo" : c2
+
+        let c3 = dbManager.getSettingValue(forKey: "column_bastidor_label")
+        labelBastidor = c3.isEmpty ? "Bastidor" : c3
+
+        let c4 = dbManager.getSettingValue(forKey: "column_date_label")
+        labelDate     = c4.isEmpty ? "Fecha" : c4
+
+        let c5 = dbManager.getSettingValue(forKey: "column_amount_label")
+        labelAmount   = c5.isEmpty ? "Importe" : c5
     }
     
     private func removeItem(_ target: BudgetItem) {

@@ -26,15 +26,19 @@ struct BudgetsView: View {
                 }
                 .contextMenu {
                     Button("Exportar PDF") {
-                        selectedBudget = bdg
-                        exportBudgetPDFNoPanel(bdg)
+                        // Tomar la versión más reciente desde la BD
+                        let updated = dbManager.fetchAllBudgets().first(where: { $0.id == bdg.id }) ?? bdg
+                        selectedBudget = updated
+                        exportBudgetPDFNoPanel(updated)
                     }
                     Button("Previsualizar") {
-                        selectedBudget = bdg
-                        previewBudget(bdg)
+                        let updated = dbManager.fetchAllBudgets().first(where: { $0.id == bdg.id }) ?? bdg
+                        selectedBudget = updated
+                        previewBudget(updated)
                     }
                     Button("Editar") {
-                        selectedBudget = bdg
+                        let updated = dbManager.fetchAllBudgets().first(where: { $0.id == bdg.id }) ?? bdg
+                        selectedBudget = updated
                         showEditBudget = true
                     }
                     Button("Borrar", role: .destructive) {
@@ -86,8 +90,6 @@ struct BudgetsView: View {
         print("DEBUG BudgetsView: exportBudgetPDFNoPanel -> \(budget)")
 
         let scaled = ScaledView(scale: 0.85) {
-            // Inyectamos el dbManager aquí para que PagedBudgetDetailView
-            // tenga acceso a .environmentObject(DatabaseManager)
             PagedBudgetDetailView(budget: budget)
                 .environmentObject(dbManager)
         }
